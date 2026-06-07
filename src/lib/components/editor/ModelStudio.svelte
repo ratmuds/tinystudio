@@ -4,8 +4,10 @@
 	import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 	import { TransformControls } from 'three/addons/controls/TransformControls.js';
 	import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+	import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 	import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
 	import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+	import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
 	import Module from 'manifold-3d';
 	import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 	import TWEEN from '@tweenjs/tween.js';
@@ -30,6 +32,8 @@
 	let renderer: THREE.WebGLRenderer;
 	let ManifoldClass: any;
 	let ManifoldMeshClass: any;
+	let mousePos = new THREE.Vector2();
+	let keys = new Set<string>();
 
 	let placing: boolean = $state(false);
 	let placingObjType: string = $state('box');
@@ -37,6 +41,8 @@
 	let placedObjColorTween: TWEEN.Tween | null = $state(null);
 	let transformControls: TransformControls;
 	let outlinePass: OutlinePass;
+	let hoverOutlinePass: OutlinePass;
+	let faceHighlight: THREE.LineSegments | null = null;
 
 	function partId(): string {
 		return crypto.randomUUID();
@@ -87,7 +93,7 @@
 				const partsList = editorState.parts.map((p) => p.object3D);
 				const intersects = raycaster.intersectObjects(partsList, true);
 				if (intersects.length === 0) {
-					editorState.deselectAll();
+					//editorState.deselectAll();
 					return;
 				}
 
@@ -104,9 +110,19 @@
 				}
 			}
 
+			function handleEscape(event: KeyboardEvent) {
+				if (event.key === 'Escape') {
+					console.log('esc pressed');
+					editorState.deselectAll();
+				}
+			}
+
 			renderer.domElement.addEventListener('mousedown', handlePartClick);
+			document.addEventListener('keydown', handleEscape);
+
 			cleanup = () => {
 				renderer.domElement.removeEventListener('mousedown', handlePartClick);
+				document.removeEventListener('keydown', handleEscape);
 			};
 		}, 100);
 
@@ -262,6 +278,40 @@
 		renderPass.background = new THREE.Color(COLORS.sky);
 		composer.addPass(renderPass);
 
+		// Retro Color Quantization Shader
+		const RetroColorShader = {
+			uniforms: {
+				tDiffuse: { value: null },
+				colorLevels: { value: 8.0 } // Number of color steps per channel (R, G, B)
+			},
+			vertexShader: `
+				varying vec2 vUv;
+				void main() {
+					vUv = uv;
+					gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+				}
+			`,
+			fragmentShader: `
+				uniform sampler2D tDiffuse;
+				uniform float colorLevels;
+				varying vec2 vUv;
+
+				void main() {
+					vec4 color = texture2D(tDiffuse, vUv);
+					
+					// Quantize colors (limit the range)
+					vec3 quantizedColor = floor(color.rgb * colorLevels) / (colorLevels - 1.0);
+					
+					gl_FragColor = vec4(quantizedColor, color.a);
+				}
+			`
+		};
+
+		// Add to your EffectComposer
+		const retroPass = new ShaderPass(RetroColorShader);
+		retroPass.uniforms.colorLevels.value = 12.0; // 4 levels = 64 possible colors
+		composer.addPass(retroPass);
+
 		outlinePass = new OutlinePass(
 			new THREE.Vector2(window.innerWidth, window.innerHeight),
 			scene,
@@ -272,6 +322,130 @@
 		outlinePass.selectedObjects = [stud];
 		outlinePass.visibleEdgeColor = new THREE.Color(0x00bbff);
 
+		hoverOutlinePass = new OutlinePass(
+			new THREE.Vector2(window.innerWidth, window.innerHeight),
+			scene,
+			camera
+		);
+		composer.addPass(hoverOutlinePass);
+
+		hoverOutlinePass.selectedObjects = [];
+		hoverOutlinePass.visibleEdgeColor = new THREE.Color(0xaaaaaa);
+
+		// Every 250ms check if hovering over a part and update hoverOutlinePass
+		let hoverCheckInterval = setInterval(() => {
+			if (!renderer || !camera || !scene || placing) return;
+
+			const rect = renderer.domElement.getBoundingClientRect();
+			const mouse = new THREE.Vector2(
+				((mousePos.x - rect.left) / rect.width) * 2 - 1,
+				-((mousePos.y - rect.top) / rect.height) * 2 + 1
+			);
+			const raycaster = new THREE.Raycaster();
+			raycaster.setFromCamera(mouse, camera);
+			const partsList = editorState.parts.map((p) => p.object3D);
+			const intersects = raycaster.intersectObjects(partsList, true);
+
+			for (let i = intersects.length - 1; i >= 0; i--) {
+				if (intersects[i].object === placingObj) {
+					intersects.splice(i, 1);
+				}
+			}
+
+			if (intersects.length > 0) {
+				let part = intersects[0].object;
+				while (part && !part.userData.partId) {
+					part = part.parent!;
+				}
+				if (part && part.userData.partId) {
+					hoverOutlinePass.selectedObjects = [part];
+				} else {
+					hoverOutlinePass.selectedObjects = [];
+				}
+			} else {
+				hoverOutlinePass.selectedObjects = [];
+			}
+
+			// Check for faces hovering
+			if (intersects.length > 0) {
+				const hit = intersects[0];
+				const mesh = hit.object;
+				const geometry = mesh.geometry;
+				const positionAttr = geometry.attributes.position;
+				const indexAttr = geometry.index; // Check if geometry uses indices
+
+				const faceNormal = hit.face?.normal;
+
+				// Plane constant for the hit face: d = n · P
+				let d_hit = 0;
+				if (faceNormal && hit.face) {
+					const hitA = new THREE.Vector3().fromBufferAttribute(positionAttr, hit.face.a);
+					d_hit = faceNormal.dot(hitA);
+				}
+
+				// Array to hold all vertex indices that belong to this multi-sided face
+				const connectedVertexIndices: number[] = [];
+
+				// Loop through every triangle in the geometry to see if it sits on the same plane
+				const triangleCount = indexAttr ? indexAttr.count / 3 : positionAttr.count / 3;
+
+				for (let i = 0; i < triangleCount; i++) {
+					// Get the 3 vertex indices for the current triangle
+					const a = indexAttr ? indexAttr.getX(i * 3) : i * 3;
+					const b = indexAttr ? indexAttr.getY(i * 3) : i * 3 + 1;
+					const c = indexAttr ? indexAttr.getZ(i * 3) : i * 3 + 2;
+
+					const aPos = new THREE.Vector3().fromBufferAttribute(positionAttr, a);
+					const bPos = new THREE.Vector3().fromBufferAttribute(positionAttr, b);
+					const cPos = new THREE.Vector3().fromBufferAttribute(positionAttr, c);
+
+					const triNormal = new THREE.Vector3()
+						.subVectors(bPos, aPos)
+						.cross(new THREE.Vector3().subVectors(cPos, aPos))
+						.normalize();
+
+					if (
+						faceNormal &&
+						triNormal.angleTo(faceNormal) < 0.01 &&
+						Math.abs(triNormal.dot(aPos) - d_hit) < 1e-4
+					) {
+						connectedVertexIndices.push(a, b, c);
+					}
+				}
+
+				if (connectedVertexIndices.length >= 3) {
+					const faceVerts: number[] = [];
+					for (const vi of connectedVertexIndices) {
+						faceVerts.push(positionAttr.getX(vi), positionAttr.getY(vi), positionAttr.getZ(vi));
+					}
+					const faceGeo = new THREE.BufferGeometry();
+					faceGeo.setAttribute('position', new THREE.Float32BufferAttribute(faceVerts, 3));
+					const edgesGeo = new THREE.EdgesGeometry(faceGeo, 0.1);
+					if (faceHighlight) scene.remove(faceHighlight);
+					faceHighlight = new THREE.LineSegments(
+						edgesGeo,
+						new THREE.LineBasicMaterial({ color: 0xffff00 })
+					);
+					mesh.getWorldPosition(faceHighlight.position);
+					mesh.getWorldQuaternion(faceHighlight.quaternion);
+					mesh.getWorldScale(faceHighlight.scale);
+					scene.add(faceHighlight);
+				} else if (faceHighlight) {
+					scene.remove(faceHighlight);
+					faceHighlight = null;
+				}
+			} else if (faceHighlight) {
+				scene.remove(faceHighlight);
+				faceHighlight = null;
+			}
+		}, 100);
+
+		// Create event listener to track mouse position for hover outline
+		function onMouseMoveMousePos(event: MouseEvent) {
+			mousePos.set(event.clientX, event.clientY);
+		}
+		renderer.domElement.addEventListener('mousemove', onMouseMoveMousePos);
+
 		function animate() {
 			placedObjColorTween?.update();
 			controls.update();
@@ -280,6 +454,10 @@
 		renderer.setAnimationLoop(animate);
 
 		return () => {
+			if (faceHighlight) {
+				scene.remove(faceHighlight);
+				faceHighlight = null;
+			}
 			editorState.parts.forEach((part) => {
 				if (part.object3D.parent === scene) {
 					scene.remove(part.object3D);
@@ -342,6 +520,19 @@
 		return new ManifoldClass(mesh);
 	}
 
+	function setOriginToGeometryCenter(mesh: THREE.Mesh) {
+		// 1. Calculate the center of the geometry's bounding box
+		mesh.geometry.computeBoundingBox();
+		const center = new THREE.Vector3();
+		mesh.geometry.boundingBox.getCenter(center);
+
+		// 2. Shift the geometry vertices back to the local origin
+		mesh.geometry.center();
+
+		// 3. Offset the mesh's position to keep it in the same world location
+		mesh.position.add(center);
+	}
+
 	function addition() {
 		if (!ManifoldClass) {
 			return;
@@ -374,13 +565,28 @@
 				: new THREE.MeshStandardMaterial({ color: 0xa0a0a0 })
 		);
 
+		resultMesh.material.flatShading = true;
+		resultMesh.material.needsUpdate = true;
+
+		// Recompute normals
+		resultMesh.geometry.deleteAttribute('normal');
+		resultMesh.geometry.computeVertexNormals();
+
+		// Clean up geometry
+		const cleanGeometry = BufferGeometryUtils.mergeVertices(resultMesh.geometry, 0.0001);
+		cleanGeometry.computeVertexNormals();
+		resultMesh.geometry = cleanGeometry;
+
+		// Create part
 		const id = partId();
 		resultMesh.userData.partId = id;
 		const newPart = editorState.addPart({ id, name: 'CSG Result', object3D: resultMesh });
 		editorState.select(id);
 		scene.add(resultMesh);
 
-		const inverseMatrix = new THREE.Matrix4().getInverse(resultMesh.matrixWorld);
+		// Calculate CSG offsets for original parts
+		resultMesh.updateMatrixWorld();
+		const inverseMatrix = new THREE.Matrix4().copy(resultMesh.matrixWorld).invert();
 		partA.CSGOffset = partA.object3D
 			.getWorldPosition(new THREE.Vector3())
 			.applyMatrix4(inverseMatrix);
@@ -390,10 +596,14 @@
 
 		newPart.CSGHistory = [partA, partB];
 
+		// Remove original parts
 		scene.remove(partA.object3D);
 		scene.remove(partB.object3D);
 		editorState.removePart(partA.id);
 		editorState.removePart(partB.id);
+
+		// Center mesh to geometry
+		setOriginToGeometryCenter(resultMesh);
 	}
 
 	function subtract() {
@@ -433,7 +643,8 @@
 
 		scene.add(resultMesh);
 
-		const inverseMatrix = new THREE.Matrix4().getInverse(resultMesh.matrixWorld);
+		resultMesh.updateMatrixWorld();
+		const inverseMatrix = new THREE.Matrix4().copy(resultMesh.matrixWorld).invert();
 		partA.CSGOffset = partA.object3D
 			.getWorldPosition(new THREE.Vector3())
 			.applyMatrix4(inverseMatrix);
@@ -447,6 +658,9 @@
 		scene.remove(partB.object3D);
 		editorState.removePart(partA.id);
 		editorState.removePart(partB.id);
+
+		// Center mesh to geometry
+		setOriginToGeometryCenter(resultMesh);
 	}
 </script>
 
