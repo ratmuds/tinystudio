@@ -1,26 +1,70 @@
 import type * as THREE from 'three';
 
-export type EditorPart = {
+export type EditorNode = {
 	id: string;
 	name: string;
-	object3D: THREE.Object3D; // the actual 3D object in the scene
-	CSGHistory?: EditorPart[]; // for CSG operations, keep track of the original parts that were combined/subtracted
-	CSGOffset?: THREE.Vector3; // for CSG operations, keep track of the offset applied to the original parts to get the final position
+	parentId?: string;
 };
 
+export type PartNode = EditorNode & {
+	type: 'part';
+	object3D: THREE.Object3D;
+	CSGHistory?: PartNode[];
+	CSGOffset?: THREE.Vector3;
+};
+
+export type ConstraintNode = EditorNode & {
+	type: 'constraint';
+	partAId: string;
+	partBId: string;
+	faceA: string;
+	faceB: string;
+	offsetA: THREE.Vector3;
+	offsetB: THREE.Vector3;
+	constraintType: string;
+	line?: THREE.Line;
+	sphereA?: THREE.Mesh;
+	sphereB?: THREE.Mesh;
+};
+
+export type AnyEditorNode = PartNode | ConstraintNode;
+
+/** @deprecated Use PartNode instead */
+export type EditorPart = PartNode;
+
 class EditorState {
-	parts = $state<EditorPart[]>([]);
+	parts = $state<PartNode[]>([]);
+	constraints = $state<ConstraintNode[]>([]);
 	selectedIds = $state<string[]>([]);
 
-	addPart(part: EditorPart) {
-		this.parts = [...this.parts, part];
+	getNode(id: string): AnyEditorNode | undefined {
+		return (
+			this.parts.find((p) => p.id === id) ??
+			this.constraints.find((c) => c.id === id)
+		);
+	}
 
+	addPart(part: PartNode): PartNode {
+		this.parts = [...this.parts, part];
 		return part;
 	}
 
-	removePart(id: string) {
+	addConstraint(constraint: ConstraintNode): ConstraintNode {
+		this.constraints = [...this.constraints, constraint];
+		return constraint;
+	}
+
+	removeNode(id: string) {
 		this.parts = this.parts.filter((p) => p.id !== id);
+		this.constraints = this.constraints.filter((c) => c.id !== id);
+		this.constraints = this.constraints.filter(
+			(c) => c.partAId !== id && c.partBId !== id
+		);
 		this.selectedIds = this.selectedIds.filter((sid) => sid !== id);
+	}
+
+	removePart(id: string) {
+		this.removeNode(id);
 	}
 
 	select(id: string) {
@@ -44,16 +88,32 @@ class EditorState {
 		return this.selectedIds.includes(id);
 	}
 
-	get selectedParts(): EditorPart[] {
+	get selectedNodes(): AnyEditorNode[] {
 		return this.selectedIds
-			.map((id) => this.parts.find((p) => p.id === id))
-			.filter((p): p is EditorPart => !!p);
+			.map((id) => this.getNode(id))
+			.filter((n): n is AnyEditorNode => !!n);
 	}
 
-	get firstSelectedPart(): EditorPart | undefined {
-		return this.selectedIds.length > 0
-			? this.parts.find((p) => p.id === this.selectedIds[0])
-			: undefined;
+	get selectedParts(): PartNode[] {
+		return this.selectedIds
+			.map((id) => this.parts.find((p) => p.id === id))
+			.filter((p): p is PartNode => !!p);
+	}
+
+	get selectedConstraints(): ConstraintNode[] {
+		return this.selectedIds
+			.map((id) => this.constraints.find((c) => c.id === id))
+			.filter((c): c is ConstraintNode => !!c);
+	}
+
+	get firstSelectedPart(): PartNode | undefined {
+		if (this.selectedIds.length === 0) return undefined;
+		return this.parts.find((p) => p.id === this.selectedIds[0]);
+	}
+
+	get firstSelectedNode(): AnyEditorNode | undefined {
+		if (this.selectedIds.length === 0) return undefined;
+		return this.getNode(this.selectedIds[0]);
 	}
 }
 

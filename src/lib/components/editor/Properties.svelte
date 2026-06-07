@@ -48,9 +48,7 @@
 
 <div class="flex h-full flex-col bg-background">
 	<div class="flex h-10 items-center justify-between border-b px-3">
-		<span class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
-			>Properties</span
-		>
+		<span class="text-xs font-semibold tracking-wider text-muted-foreground uppercase">Properties</span>
 		<button class="text-muted-foreground hover:text-foreground">
 			<Info class="h-3.5 w-3.5" />
 		</button>
@@ -91,6 +89,37 @@
 								</div>
 							</div>
 						{/each}
+					</div>
+				</div>
+			</div>
+		{:else if editorState.selectedConstraints.length > 0}
+			{@const c = editorState.selectedConstraints[0]}
+			<div class="space-y-4">
+				<div>
+					<span class="text-xs font-medium text-muted-foreground uppercase">Constraint</span>
+					<p class="mt-1 text-sm capitalize">{c.constraintType}</p>
+				</div>
+				<div>
+					<span class="text-xs font-medium text-muted-foreground uppercase">Part A</span>
+					<p class="mt-1 text-sm">
+						{editorState.parts.find((p) => p.id === c.partAId)?.name ?? c.partAId}
+					</p>
+				</div>
+				<div>
+					<span class="text-xs font-medium text-muted-foreground uppercase">Part B</span>
+					<p class="mt-1 text-sm">
+						{editorState.parts.find((p) => p.id === c.partBId)?.name ?? c.partBId}
+					</p>
+				</div>
+				<div>
+					<span class="text-xs font-medium text-muted-foreground uppercase">Attachment</span>
+					<div class="mt-1 space-y-1 text-xs text-muted-foreground">
+						<p>A: {c.faceA}{" "}
+							({c.offsetA.x.toFixed(1)}, {c.offsetA.y.toFixed(1)}, {c.offsetA.z.toFixed(1)})
+						</p>
+						<p>B: {c.faceB}{" "}
+							({c.offsetB.x.toFixed(1)}, {c.offsetB.y.toFixed(1)}, {c.offsetB.z.toFixed(1)})
+						</p>
 					</div>
 				</div>
 			</div>

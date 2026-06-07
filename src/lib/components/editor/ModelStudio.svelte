@@ -11,7 +11,18 @@
 	import Module from 'manifold-3d';
 	import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 	import TWEEN from '@tweenjs/tween.js';
-	import { editorState, type EditorPart } from '$lib/stores/editor.svelte';
+	import { editorState, type PartNode, type ConstraintNode } from '$lib/stores/editor.svelte';
+	import {
+		Box,
+		Circle,
+		Layers,
+		Triangle,
+		Orbit,
+		Square,
+		Combine,
+		Minus,
+		Link2
+	} from '@lucide/svelte';
 
 	const RES_W = 320;
 	const RES_H = 240;
@@ -35,6 +46,57 @@
 	let mousePos = new THREE.Vector2();
 	let keys = new Set<string>();
 
+	const FACE_NORMALS: Record<string, THREE.Vector3> = {
+		top: new THREE.Vector3(0, 1, 0),
+		bottom: new THREE.Vector3(0, -1, 0),
+		front: new THREE.Vector3(0, 0, 1),
+		back: new THREE.Vector3(0, 0, -1),
+		left: new THREE.Vector3(-1, 0, 0),
+		right: new THREE.Vector3(1, 0, 0)
+	};
+
+	function getFaceWorldPosition(
+		obj: THREE.Object3D,
+		face: string,
+		offset: THREE.Vector3
+	): THREE.Vector3 {
+		const box = new THREE.Box3().setFromObject(obj);
+		const center = new THREE.Vector3();
+		box.getCenter(center);
+		const size = new THREE.Vector3();
+		box.getSize(size);
+
+		const normal = FACE_NORMALS[face] ?? FACE_NORMALS.top;
+		const faceCenter = center
+			.clone()
+			.add(
+				new THREE.Vector3((size.x / 2) * normal.x, (size.y / 2) * normal.y, (size.z / 2) * normal.z)
+			);
+
+		return faceCenter.add(offset);
+	}
+
+	function updateConstraintVisuals() {
+		if (!scene) return;
+		for (const c of editorState.constraints) {
+			const partA = editorState.parts.find((p) => p.id === c.partAId);
+			const partB = editorState.parts.find((p) => p.id === c.partBId);
+			if (!partA || !partB) continue;
+
+			const posA = getFaceWorldPosition(partA.object3D, c.faceA, c.offsetA);
+			const posB = getFaceWorldPosition(partB.object3D, c.faceB, c.offsetB);
+
+			if (c.sphereA) c.sphereA.position.copy(posA);
+			if (c.sphereB) c.sphereB.position.copy(posB);
+			if (c.line) {
+				const pos = c.line.geometry.attributes.position;
+				pos.setXYZ(0, posA.x, posA.y, posA.z);
+				pos.setXYZ(1, posB.x, posB.y, posB.z);
+				pos.needsUpdate = true;
+			}
+		}
+	}
+
 	let placing: boolean = $state(false);
 	let placingObjType: string = $state('box');
 	let placingObj: THREE.Object3D | null = $state(null);
@@ -52,25 +114,47 @@
 		placingObjType = obj;
 		placing = true;
 
-		if (obj === 'box') {
-			const geometry = new THREE.BoxGeometry(1, 1, 1);
-			const material = new THREE.MeshStandardMaterial({ color: 0xa0a0a0, transparent: true });
-			placingObj = new THREE.Mesh(geometry, material);
-			scene.add(placingObj);
+		const material = new THREE.MeshStandardMaterial({ color: 0xa0a0a0, transparent: true });
+		let geometry: THREE.BufferGeometry;
+
+		switch (obj) {
+			case 'box':
+				geometry = new THREE.BoxGeometry(1, 1, 1);
+				break;
+			case 'sphere':
+				geometry = new THREE.SphereGeometry(0.5, 12, 8);
+				break;
+			case 'cylinder':
+				geometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 8);
+				break;
+			case 'cone':
+				geometry = new THREE.ConeGeometry(0.5, 1, 8);
+				break;
+			case 'torus':
+				geometry = new THREE.TorusGeometry(0.5, 0.2, 8, 12);
+				break;
+			case 'plane':
+				geometry = new THREE.PlaneGeometry(1, 1);
+				break;
+			default:
+				geometry = new THREE.BoxGeometry(1, 1, 1);
 		}
+
+		placingObj = new THREE.Mesh(geometry, material);
+		scene.add(placingObj);
 	}
 
 	$effect(() => {
 		const ids = editorState.selectedIds;
 		if (!outlinePass || !transformControls) return;
 
-		const objs = editorState.selectedParts.map((p) => p.object3D);
-		outlinePass.selectedObjects = objs;
-
-		const first = editorState.firstSelectedPart;
-		if (first) {
+		const first = editorState.firstSelectedNode;
+		if (first && first.type === 'part') {
+			const objs = editorState.selectedParts.map((p) => p.object3D);
+			outlinePass.selectedObjects = objs;
 			transformControls.attach(first.object3D);
 		} else {
+			outlinePass.selectedObjects = [];
 			transformControls.detach();
 		}
 	});
@@ -133,6 +217,20 @@
 	});
 
 	$effect(() => {
+		if (!scene) return;
+		const activeIds = new Set(editorState.constraints.map((c) => c.id));
+		const toRemove: THREE.Object3D[] = [];
+		scene.traverse((child: THREE.Object3D) => {
+			if (child.userData.constraintId && !activeIds.has(child.userData.constraintId)) {
+				toRemove.push(child);
+			}
+		});
+		toRemove.forEach((child) => {
+			child.parent?.remove(child);
+		});
+	});
+
+	$effect(() => {
 		if (!placing || !renderer || !camera || !scene || !placingObj) return;
 
 		const raycaster = new THREE.Raycaster();
@@ -176,8 +274,9 @@
 			newPart.position.copy(placingObj.position);
 
 			const id = partId();
+			const partName = placingObjType.charAt(0).toUpperCase() + placingObjType.slice(1);
 			newPart.userData.partId = id;
-			editorState.addPart({ id, name: 'Box', object3D: newPart });
+			editorState.addPart({ id, name: partName, type: 'part', object3D: newPart });
 			editorState.select(id);
 
 			scene.add(newPart);
@@ -259,7 +358,7 @@
 		const stud = new THREE.Group();
 		const studId = partId();
 		stud.userData.partId = studId;
-		editorState.addPart({ id: studId, name: 'Stud', object3D: stud });
+		editorState.addPart({ id: studId, name: 'Stud', type: 'part', object3D: stud });
 		editorState.select(studId);
 
 		const studMat = new THREE.MeshStandardMaterial({ color: COLORS.stud });
@@ -448,6 +547,7 @@
 
 		function animate() {
 			placedObjColorTween?.update();
+			updateConstraintVisuals();
 			controls.update();
 			composer.render();
 		}
@@ -580,7 +680,12 @@
 		// Create part
 		const id = partId();
 		resultMesh.userData.partId = id;
-		const newPart = editorState.addPart({ id, name: 'CSG Result', object3D: resultMesh });
+		const newPart = editorState.addPart({
+			id,
+			name: 'CSG Result',
+			type: 'part',
+			object3D: resultMesh
+		});
 		editorState.select(id);
 		scene.add(resultMesh);
 
@@ -636,9 +741,26 @@
 				: new THREE.MeshStandardMaterial({ color: 0xa0a0a0 })
 		);
 
+		resultMesh.material.flatShading = true;
+		resultMesh.material.needsUpdate = true;
+
+		// Recompute normals
+		resultMesh.geometry.deleteAttribute('normal');
+		resultMesh.geometry.computeVertexNormals();
+
+		// Clean up geometry
+		const cleanGeometry = BufferGeometryUtils.mergeVertices(resultMesh.geometry, 0.0001);
+		cleanGeometry.computeVertexNormals();
+		resultMesh.geometry = cleanGeometry;
+
 		const id = partId();
 		resultMesh.userData.partId = id;
-		const newPart = editorState.addPart({ id, name: 'CSG Result', object3D: resultMesh });
+		const newPart = editorState.addPart({
+			id,
+			name: 'CSG Result',
+			type: 'part',
+			object3D: resultMesh
+		});
 		editorState.select(id);
 
 		scene.add(resultMesh);
@@ -662,6 +784,68 @@
 		// Center mesh to geometry
 		setOriginToGeometryCenter(resultMesh);
 	}
+
+	function addFixedConstraint() {
+		if (!scene) return;
+
+		const parts = editorState.selectedParts;
+		if (parts.length !== 2) {
+			alert('Select exactly 2 parts to create a constraint');
+			return;
+		}
+
+		const [partA, partB] = parts;
+
+		const posA = getFaceWorldPosition(partA.object3D, 'top', new THREE.Vector3());
+		const posB = getFaceWorldPosition(partB.object3D, 'top', new THREE.Vector3());
+
+		const sphereGeo = new THREE.SphereGeometry(0.08, 8, 8);
+		const sphereMat = new THREE.MeshBasicMaterial({
+			color: 0xff4444,
+			depthTest: false,
+			depthWrite: false
+		});
+		const sphereA = new THREE.Mesh(sphereGeo, sphereMat);
+		const sphereB = new THREE.Mesh(sphereGeo.clone(), sphereMat.clone());
+		sphereA.position.copy(posA);
+		sphereB.position.copy(posB);
+
+		const lineGeo = new THREE.BufferGeometry().setFromPoints([posA, posB]);
+		const lineMat = new THREE.LineBasicMaterial({
+			color: 0xff4444,
+			depthTest: false,
+			depthWrite: false
+		});
+		const line = new THREE.Line(lineGeo, lineMat);
+
+		const constraintId = partId();
+		sphereA.userData.constraintId = constraintId;
+		sphereB.userData.constraintId = constraintId;
+		line.userData.constraintId = constraintId;
+
+		scene.add(sphereA);
+		scene.add(sphereB);
+		scene.add(line);
+
+		const constraint: ConstraintNode = {
+			id: constraintId,
+			name: `Fixed (${partA.name} ↔ ${partB.name})`,
+			type: 'constraint',
+			partAId: partA.id,
+			partBId: partB.id,
+			faceA: 'top',
+			faceB: 'top',
+			offsetA: new THREE.Vector3(),
+			offsetB: new THREE.Vector3(),
+			constraintType: 'fixed',
+			line,
+			sphereA,
+			sphereB
+		};
+
+		editorState.addConstraint(constraint);
+		editorState.select(constraintId);
+	}
 </script>
 
 <div
@@ -669,18 +853,91 @@
 	class="flex h-full items-center justify-center overflow-hidden bg-[#87ceeb]"
 ></div>
 
-<br />
+<div class="flex flex-col gap-5 p-3">
+	<div>
+		<div class="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+			Primitives
+		</div>
+		<div class="grid grid-cols-3 gap-1.5">
+			<button
+				onclick={() => startPlacing('box')}
+				class="flex flex-col items-center gap-1 rounded px-3 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+			>
+				<Box class="h-4 w-4" />
+				<span>Box</span>
+			</button>
+			<button
+				onclick={() => startPlacing('sphere')}
+				class="flex flex-col items-center gap-1 rounded px-3 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+			>
+				<Circle class="h-4 w-4" />
+				<span>Sphere</span>
+			</button>
+			<button
+				onclick={() => startPlacing('cylinder')}
+				class="flex flex-col items-center gap-1 rounded px-3 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+			>
+				<Layers class="h-4 w-4" />
+				<span>Cylinder</span>
+			</button>
+			<button
+				onclick={() => startPlacing('cone')}
+				class="flex flex-col items-center gap-1 rounded px-3 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+			>
+				<Triangle class="h-4 w-4" />
+				<span>Cone</span>
+			</button>
+			<button
+				onclick={() => startPlacing('torus')}
+				class="flex flex-col items-center gap-1 rounded px-3 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+			>
+				<Orbit class="h-4 w-4" />
+				<span>Torus</span>
+			</button>
+			<button
+				onclick={() => startPlacing('plane')}
+				class="flex flex-col items-center gap-1 rounded px-3 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+			>
+				<Square class="h-4 w-4" />
+				<span>Plane</span>
+			</button>
+		</div>
+	</div>
 
-<p>Part placement</p>
+	<div>
+		<div class="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+			CSG Operations
+		</div>
+		<div class="flex gap-1.5">
+			<button
+				onclick={addition}
+				class="flex items-center gap-1.5 rounded px-3 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+			>
+				<Combine class="h-4 w-4" />
+				<span>Union</span>
+			</button>
+			<button
+				onclick={subtract}
+				class="flex items-center gap-1.5 rounded px-3 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+			>
+				<Minus class="h-4 w-4" />
+				<span>Subtract</span>
+			</button>
+		</div>
+	</div>
 
-<button class="border p-2" onclick={() => startPlacing('box')}>add box</button>
-
-<br />
-
-<p>CSG tools</p>
-
-<button class="border p-2" onclick={addition}>add (union)</button>
-<button class="border p-2" onclick={subtract}>subtract</button>
-
-<p>Constraint Tools</p>
-<button class="border p-2" onclick={() => alert('Not implemented yet')}>fixed</button>
+	<div>
+		<div class="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+			Constraints
+		</div>
+		<div class="flex gap-1.5">
+			<button
+				onclick={addFixedConstraint}
+				class="flex items-center gap-1.5 rounded px-3 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+			>
+				<Link2 class="h-4 w-4" />
+				<span>Fixed</span>
+			</button>
+		</div>
+	</div>
+</div>
