@@ -36,12 +36,11 @@ class EditorState {
 	parts = $state<PartNode[]>([]);
 	constraints = $state<ConstraintNode[]>([]);
 	selectedIds = $state<string[]>([]);
+	selectedFaces = $state<Array<{ faceIndex: number; mesh: THREE.Mesh }>>([]);
+	// ^ same order as selectedIds
 
 	getNode(id: string): AnyEditorNode | undefined {
-		return (
-			this.parts.find((p) => p.id === id) ??
-			this.constraints.find((c) => c.id === id)
-		);
+		return this.parts.find((p) => p.id === id) ?? this.constraints.find((c) => c.id === id);
 	}
 
 	addPart(part: PartNode): PartNode {
@@ -57,31 +56,40 @@ class EditorState {
 	removeNode(id: string) {
 		this.parts = this.parts.filter((p) => p.id !== id);
 		this.constraints = this.constraints.filter((c) => c.id !== id);
-		this.constraints = this.constraints.filter(
-			(c) => c.partAId !== id && c.partBId !== id
-		);
-		this.selectedIds = this.selectedIds.filter((sid) => sid !== id);
+		this.constraints = this.constraints.filter((c) => c.partAId !== id && c.partBId !== id);
+		const removeIdx = this.selectedIds.indexOf(id);
+		if (removeIdx !== -1) {
+			this.selectedIds = this.selectedIds.filter((_, i) => i !== removeIdx);
+			this.selectedFaces = this.selectedFaces.filter((_, i) => i !== removeIdx);
+		}
 	}
 
 	removePart(id: string) {
 		this.removeNode(id);
 	}
 
-	select(id: string) {
+	select(id: string, faceIndex: number = 0, mesh?: THREE.Mesh) {
 		this.selectedIds = [id];
+		this.selectedFaces = [{ faceIndex, mesh: mesh! }];
 	}
 
-	toggleSelect(id: string) {
+	toggleSelect(id: string, faceIndex: number = 0, mesh?: THREE.Mesh) {
 		const idx = this.selectedIds.indexOf(id);
-		if (idx === -1) {
+		if (
+			idx === -1 ||
+			(this.selectedFaces[idx] && this.selectedFaces[idx].faceIndex !== faceIndex)
+		) {
+			this.selectedFaces = [...this.selectedFaces, { faceIndex, mesh: mesh! }];
 			this.selectedIds = [...this.selectedIds, id];
 		} else {
 			this.selectedIds = this.selectedIds.filter((sid) => sid !== id);
+			this.selectedFaces = this.selectedFaces.filter((_, i) => i !== idx);
 		}
 	}
 
 	deselectAll() {
 		this.selectedIds = [];
+		this.selectedFaces = [];
 	}
 
 	isSelected(id: string): boolean {
@@ -89,9 +97,7 @@ class EditorState {
 	}
 
 	get selectedNodes(): AnyEditorNode[] {
-		return this.selectedIds
-			.map((id) => this.getNode(id))
-			.filter((n): n is AnyEditorNode => !!n);
+		return this.selectedIds.map((id) => this.getNode(id)).filter((n): n is AnyEditorNode => !!n);
 	}
 
 	get selectedParts(): PartNode[] {
@@ -114,6 +120,12 @@ class EditorState {
 	get firstSelectedNode(): AnyEditorNode | undefined {
 		if (this.selectedIds.length === 0) return undefined;
 		return this.getNode(this.selectedIds[0]);
+	}
+
+	faceFromSelectedPartId(id: string): { faceIndex: number; mesh: THREE.Mesh } | undefined {
+		const idx = this.selectedIds.indexOf(id);
+		if (idx === -1) return undefined;
+		return this.selectedFaces[idx];
 	}
 }
 

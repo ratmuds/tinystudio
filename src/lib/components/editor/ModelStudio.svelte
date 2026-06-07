@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import * as THREE from 'three';
 	import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+	import { FlyControls } from 'three/addons/controls/FlyControls.js';
 	import { TransformControls } from 'three/addons/controls/TransformControls.js';
 	import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 	import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
@@ -21,7 +22,9 @@
 		Square,
 		Combine,
 		Minus,
-		Link2
+		Link2,
+		Eye,
+		EyeOff
 	} from '@lucide/svelte';
 
 	const RES_W = 320;
@@ -36,6 +39,8 @@
 		sun: 0xffee88
 	};
 
+	let nextManifoldID = 1;
+	const manifoldMaterialMap = new Map<number, THREE.Material>();
 	let container: HTMLDivElement;
 
 	let scene: THREE.Scene;
@@ -44,7 +49,8 @@
 	let ManifoldClass: any;
 	let ManifoldMeshClass: any;
 	let mousePos = new THREE.Vector2();
-	let keys = new Set<string>();
+
+	let selectionMode: 'part' | 'face' = $state('part');
 
 	const FACE_NORMALS: Record<string, THREE.Vector3> = {
 		top: new THREE.Vector3(0, 1, 0),
@@ -76,9 +82,81 @@
 		return faceCenter.add(offset);
 	}
 
+	function getFaceEdgesGeometry(
+		geometry: THREE.BufferGeometry,
+		faceIndex: number
+	): THREE.BufferGeometry | null {
+		const indexAttr = geometry.index;
+		const positionAttr = geometry.attributes.position;
+
+		const a = indexAttr ? indexAttr.getX(faceIndex * 3) : faceIndex * 3;
+		const b = indexAttr ? indexAttr.getY(faceIndex * 3) : faceIndex * 3 + 1;
+		const c = indexAttr ? indexAttr.getZ(faceIndex * 3) : faceIndex * 3 + 2;
+
+		const aPos = new THREE.Vector3().fromBufferAttribute(positionAttr, a);
+		const bPos = new THREE.Vector3().fromBufferAttribute(positionAttr, b);
+		const cPos = new THREE.Vector3().fromBufferAttribute(positionAttr, c);
+
+		const faceNormal = new THREE.Vector3()
+			.subVectors(bPos, aPos)
+			.cross(new THREE.Vector3().subVectors(cPos, aPos))
+			.normalize();
+
+		const d = faceNormal.dot(aPos);
+		const connectedIndices: number[] = [];
+		const triCount = indexAttr ? indexAttr.count / 3 : positionAttr.count / 3;
+
+		for (let i = 0; i < triCount; i++) {
+			const ai = indexAttr ? indexAttr.getX(i * 3) : i * 3;
+			const bi = indexAttr ? indexAttr.getY(i * 3) : i * 3 + 1;
+			const ci = indexAttr ? indexAttr.getZ(i * 3) : i * 3 + 2;
+
+			const aPi = new THREE.Vector3().fromBufferAttribute(positionAttr, ai);
+			const bPi = new THREE.Vector3().fromBufferAttribute(positionAttr, bi);
+			const cPi = new THREE.Vector3().fromBufferAttribute(positionAttr, ci);
+
+			const triNormal = new THREE.Vector3()
+				.subVectors(bPi, aPi)
+				.cross(new THREE.Vector3().subVectors(cPi, aPi))
+				.normalize();
+
+			if (faceNormal.angleTo(triNormal) < 0.01 && Math.abs(triNormal.dot(aPi) - d) < 1e-4) {
+				connectedIndices.push(ai, bi, ci);
+			}
+		}
+
+		if (connectedIndices.length < 3) return null;
+
+		const verts: number[] = [];
+		for (const vi of connectedIndices) {
+			verts.push(positionAttr.getX(vi), positionAttr.getY(vi), positionAttr.getZ(vi));
+		}
+
+		const geo = new THREE.BufferGeometry();
+		geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+		return geo;
+	}
+
+	function getFaceCenterWorld(mesh: THREE.Mesh, faceIndex: number): THREE.Vector3 {
+		const faceGeo = getFaceEdgesGeometry(mesh.geometry, faceIndex);
+		if (!faceGeo) return new THREE.Vector3();
+		const pos = faceGeo.attributes.position;
+		const center = new THREE.Vector3();
+		for (let i = 0; i < pos.count; i++) {
+			center.x += pos.getX(i);
+			center.y += pos.getY(i);
+			center.z += pos.getZ(i);
+		}
+		center.divideScalar(pos.count);
+		mesh.updateWorldMatrix(true, false);
+		center.applyMatrix4(mesh.matrixWorld);
+		return center;
+	}
+
 	function updateConstraintVisuals() {
 		if (!scene) return;
 		for (const c of editorState.constraints) {
+			if (c.faceA === 'selected') continue;
 			const partA = editorState.parts.find((p) => p.id === c.partAId);
 			const partB = editorState.parts.find((p) => p.id === c.partBId);
 			if (!partA || !partB) continue;
@@ -105,6 +183,81 @@
 	let outlinePass: OutlinePass;
 	let hoverOutlinePass: OutlinePass;
 	let faceHighlight: THREE.LineSegments | null = null;
+	let selectedFaceHighlights: THREE.LineSegments[] = [];
+
+	// --- Isolation ---
+	type IsolationMode = 'hidden' | 'transparent';
+
+	let isolationEnabled = $state(false);
+	let isolationMode = $state<IsolationMode>('transparent');
+	let isolatedIds: string[] = $state([]);
+
+	function visibleParts() {
+		if (!isolationEnabled) return editorState.parts;
+		return editorState.parts.filter((p) => isolatedIds.includes(p.id));
+	}
+
+	function toggleIsolateSelected() {
+		const next = [...isolatedIds];
+		for (const id of editorState.selectedIds) {
+			const idx = next.indexOf(id);
+			idx >= 0 ? next.splice(idx, 1) : next.push(id);
+		}
+		isolatedIds = next;
+	}
+
+	function toggleIsolation() {
+		isolationEnabled = !isolationEnabled;
+	}
+
+	function toggleIsolationMode() {
+		isolationMode = isolationMode === 'hidden' ? 'transparent' : 'hidden';
+	}
+
+	$effect(() => {
+		const _enabled = isolationEnabled;
+		const _mode = isolationMode;
+		const _ids = isolatedIds;
+		for (const part of editorState.parts) {
+			const isolated = _ids.includes(part.id);
+			if (!_enabled || isolated) {
+				part.object3D.visible = true;
+				part.object3D.traverse((child: THREE.Object3D) => {
+					if (child instanceof THREE.Mesh) {
+						const mats = Array.isArray(child.material) ? child.material : [child.material];
+						for (const m of mats) {
+							m.transparent = false;
+							m.opacity = 1;
+							m.needsUpdate = true;
+						}
+					}
+				});
+			} else if (_mode === 'hidden') {
+				part.object3D.visible = false;
+			} else {
+				part.object3D.visible = true;
+				part.object3D.traverse((child: THREE.Object3D) => {
+					if (child instanceof THREE.Mesh) {
+						const mats = Array.isArray(child.material) ? child.material : [child.material];
+						for (const m of mats) {
+							m.transparent = true;
+							m.opacity = 0.1;
+							m.needsUpdate = true;
+						}
+					}
+				});
+			}
+		}
+	});
+
+	function filterIsolated<T extends { object: THREE.Object3D }>(hits: T[]): T[] {
+		if (!isolationEnabled) return hits;
+		return hits.filter((hit) => {
+			let obj: THREE.Object3D | null = hit.object;
+			while (obj && !obj.userData.partId) obj = obj.parent;
+			return obj !== null && isolatedIds.includes(obj.userData.partId);
+		});
+	}
 
 	function partId(): string {
 		return crypto.randomUUID();
@@ -160,6 +313,47 @@
 	});
 
 	$effect(() => {
+		console.log('selected faces changed', editorState.selectedFaces);
+		if (!scene) return;
+
+		const highlights: THREE.LineSegments[] = [];
+
+		for (let i = 0; i < editorState.selectedIds.length; i++) {
+			const faceData = editorState.selectedFaces[i];
+			console.log('faceData', faceData);
+			if (!faceData) continue;
+			const mesh = faceData.mesh;
+			if (!mesh?.geometry) continue;
+			const faceGeo = getFaceEdgesGeometry(mesh.geometry, faceData.faceIndex);
+			if (!faceGeo) continue;
+			const edgesGeo = new THREE.EdgesGeometry(faceGeo, 0.1);
+			const highlight = new THREE.LineSegments(
+				edgesGeo,
+				new THREE.LineBasicMaterial({ color: 0x44ff44 })
+			);
+			highlight.position.add(mesh.position);
+			mesh.add(highlight);
+			highlights.push(highlight);
+			scene.add(highlight);
+		}
+
+		const oldHighlights = selectedFaceHighlights;
+		selectedFaceHighlights = highlights;
+
+		oldHighlights.forEach((h) => {
+			h.parent?.remove(h);
+			h.geometry.dispose();
+		});
+
+		return () => {
+			for (const h of oldHighlights) {
+				h.parent?.remove(h);
+				h.geometry.dispose();
+			}
+		};
+	});
+
+	$effect(() => {
 		let cleanup: (() => void) | undefined;
 		const timer = setTimeout(() => {
 			if (!renderer || !camera || !scene) return;
@@ -174,7 +368,7 @@
 				);
 				const raycaster = new THREE.Raycaster();
 				raycaster.setFromCamera(mouse, camera);
-				const partsList = editorState.parts.map((p) => p.object3D);
+				const partsList = visibleParts().map((p) => p.object3D);
 				const intersects = raycaster.intersectObjects(partsList, true);
 				if (intersects.length === 0) {
 					//editorState.deselectAll();
@@ -187,26 +381,45 @@
 				}
 				if (part && part.userData.partId) {
 					if (event.shiftKey) {
-						editorState.toggleSelect(part.userData.partId);
+						if (selectionMode === 'face') {
+							const faceIndex = intersects[0].faceIndex ?? 0;
+							const hitMesh = intersects[0].object as THREE.Mesh;
+							editorState.toggleSelect(part.userData.partId, faceIndex, hitMesh);
+							console.log('toggled face selection', part.userData.partId, faceIndex);
+						} else {
+							editorState.toggleSelect(part.userData.partId);
+						}
 					} else {
-						editorState.select(part.userData.partId);
+						if (selectionMode === 'face') {
+							const faceIndex = intersects[0].faceIndex ?? 0;
+							const hitMesh = intersects[0].object as THREE.Mesh;
+							editorState.select(part.userData.partId, faceIndex, hitMesh);
+							console.log('selected face', part.userData.partId, faceIndex);
+						} else {
+							editorState.select(part.userData.partId);
+						}
 					}
 				}
 			}
 
-			function handleEscape(event: KeyboardEvent) {
+			function handleKey(event: KeyboardEvent) {
 				if (event.key === 'Escape') {
 					console.log('esc pressed');
 					editorState.deselectAll();
 				}
+
+				if (event.key === 'Tab') {
+					event.preventDefault();
+					selectionMode = selectionMode === 'part' ? 'face' : 'part';
+				}
 			}
 
 			renderer.domElement.addEventListener('mousedown', handlePartClick);
-			document.addEventListener('keydown', handleEscape);
+			document.addEventListener('keydown', handleKey);
 
 			cleanup = () => {
 				renderer.domElement.removeEventListener('mousedown', handlePartClick);
-				document.removeEventListener('keydown', handleEscape);
+				document.removeEventListener('keydown', handleKey);
 			};
 		}, 100);
 
@@ -246,13 +459,15 @@
 			mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
 			raycaster.setFromCamera(mouse, camera);
-			const intersects = raycaster.intersectObjects(scene.children, true);
+			let intersects = raycaster.intersectObjects(scene.children, true);
 
 			for (let i = intersects.length - 1; i >= 0; i--) {
 				if (intersects[i].object === placingObj) {
 					intersects.splice(i, 1);
 				}
 			}
+
+			intersects = filterIsolated(intersects);
 
 			if (intersects.length > 0) {
 				intersectPoint.copy(intersects[0].point).floor().addScalar(0.5);
@@ -332,11 +547,10 @@
 		});
 
 		const controls = new OrbitControls(camera, renderer.domElement);
-		controls.target.set(0, 1, 0);
 		controls.enableDamping = true;
 		controls.dampingFactor = 0.05;
-		controls.minDistance = 3;
-		controls.maxDistance = 20;
+		controls.minDistance = 1;
+		controls.maxDistance = 200;
 		controls.update();
 
 		transformControls = new TransformControls(camera, renderer.domElement);
@@ -442,7 +656,7 @@
 			);
 			const raycaster = new THREE.Raycaster();
 			raycaster.setFromCamera(mouse, camera);
-			const partsList = editorState.parts.map((p) => p.object3D);
+			const partsList = visibleParts().map((p) => p.object3D);
 			const intersects = raycaster.intersectObjects(partsList, true);
 
 			for (let i = intersects.length - 1; i >= 0; i--) {
@@ -558,6 +772,11 @@
 				scene.remove(faceHighlight);
 				faceHighlight = null;
 			}
+			for (const h of selectedFaceHighlights) {
+				h.parent?.remove(h);
+				h.geometry.dispose();
+			}
+			selectedFaceHighlights = [];
 			editorState.parts.forEach((part) => {
 				if (part.object3D.parent === scene) {
 					scene.remove(part.object3D);
@@ -569,7 +788,15 @@
 		};
 	});
 
-	function geometry2manifoldMesh(geometry: THREE.BufferGeometry): any {
+	/**
+	 * Converts a Three.js geometry into a Manifold Mesh for CSG.
+	 *
+	 * The `id` parameter tags every triangle in this mesh with a unique number.
+	 * When Manifold runs a CSG operation, each output triangle keeps the ID of
+	 * whichever input part it came from. Later we look up that ID to find the
+	 * right material — that's how materials survive union/subtract/etc.
+	 */
+	function geometry2manifoldMesh(geometry: THREE.BufferGeometry, id = 0): any {
 		const vertProperties = new Float32Array(geometry.attributes.position.array);
 		const numVert = geometry.attributes.position.count;
 		let triVerts: Uint32Array;
@@ -583,40 +810,102 @@
 			vertProperties,
 			triVerts,
 			runIndex: new Uint32Array([0]),
-			runOriginalID: new Uint32Array([0])
+			runOriginalID: new Uint32Array([id])
 		});
 		mesh.merge();
 		return mesh;
 	}
 
-	function mesh2geometry(mesh: any): THREE.BufferGeometry {
-		const geometry = new THREE.BufferGeometry();
-		geometry.setAttribute('position', new THREE.BufferAttribute(mesh.vertProperties, 3));
-		geometry.setIndex(new THREE.BufferAttribute(mesh.triVerts, 1));
-		geometry.computeVertexNormals();
-		return geometry;
+	function manifoldResultToThreeJS(
+		resultMesh: any,
+		materialMap: Map<number, THREE.Material>
+	): {
+		rawGeometry: THREE.BufferGeometry;
+		materials: THREE.Material[];
+		groups: Array<{ start: number; count: number; materialIndex: number }>;
+	} {
+		// Collect one material per unique part ID
+		const materials: THREE.Material[] = [];
+		const idToMatIndex = new Map<number, number>();
+
+		for (let run = 0; run < resultMesh.numRun; run++) {
+			const partID = resultMesh.runOriginalID[run];
+			if (!idToMatIndex.has(partID)) {
+				const sourceMat = materialMap.get(partID);
+				idToMatIndex.set(partID, materials.length);
+				materials.push(
+					sourceMat ? sourceMat.clone() : new THREE.MeshStandardMaterial({ color: 0xa0a0a0 })
+				);
+			}
+		}
+
+		// Step 2: Build the raw geometry (no groups yet)
+		const rawGeometry = new THREE.BufferGeometry();
+		rawGeometry.setAttribute('position', new THREE.BufferAttribute(resultMesh.vertProperties, 3));
+		rawGeometry.setIndex(new THREE.BufferAttribute(resultMesh.triVerts, 1));
+
+		// Step 3: Figure out which triangles use which material
+		// Consecutive runs with the same ID get merged into one group.
+		// The arrays have (numRun + 1) entries. The last one is a sentinel
+		// that makes the final group get created.
+		const groups: Array<{ start: number; count: number; materialIndex: number }> = [];
+
+		if (resultMesh.numRun > 0) {
+			let currentID = resultMesh.runOriginalID[0];
+			let groupStart = resultMesh.runIndex[0];
+
+			for (let run = 0; run < resultMesh.numRun; run++) {
+				const nextID = resultMesh.runOriginalID[run + 1];
+				if (nextID !== currentID) {
+					const groupEnd = resultMesh.runIndex[run + 1];
+					groups.push({
+						start: groupStart,
+						count: groupEnd - groupStart,
+						materialIndex: idToMatIndex.get(currentID)!
+					});
+					currentID = nextID;
+					groupStart = groupEnd;
+				}
+			}
+		}
+
+		return { rawGeometry, materials, groups };
 	}
 
 	function manifoldFromObject(object: THREE.Object3D): any {
 		let geometry: THREE.BufferGeometry;
+		let material: THREE.Material | null = null;
 
 		if (object instanceof THREE.Mesh) {
+			// Single mesh: clone and bake world position into the vertices
 			geometry = object.geometry.clone();
 			geometry.applyMatrix4(object.matrixWorld);
+			const objMat = object.material as THREE.Material | THREE.Material[];
+			material = Array.isArray(objMat) ? objMat[0] : objMat;
 		} else {
+			// Group: merge all child mesh geometries into one
 			const geometries: THREE.BufferGeometry[] = [];
 			object.traverse((child) => {
 				if (child instanceof THREE.Mesh) {
 					const cloned = child.geometry.clone();
 					cloned.applyMatrix4(child.matrixWorld);
 					geometries.push(cloned);
+					if (!material) {
+						const childMat = child.material as THREE.Material | THREE.Material[];
+						material = Array.isArray(childMat) ? childMat[0] : childMat;
+					}
 				}
 			});
 			if (geometries.length === 0) throw new Error('No mesh geometry found');
 			geometry = geometries.length === 1 ? geometries[0] : mergeGeometries(geometries);
 		}
 
-		const mesh = geometry2manifoldMesh(geometry);
+		// Give this part a unique ID and remember its material
+		const id = nextManifoldID++;
+		if (material) manifoldMaterialMap.set(id, material);
+
+		// Convert to Manifold, tagging every triangle with this part's ID
+		const mesh = geometry2manifoldMesh(geometry, id);
 		return new ManifoldClass(mesh);
 	}
 
@@ -633,51 +922,59 @@
 		mesh.position.add(center);
 	}
 
+	/**
+	 * Union of two selected parts. The result keeps both materials.
+	 */
 	function addition() {
-		if (!ManifoldClass) {
-			return;
-		}
+		if (!ManifoldClass) return;
 
 		const parts = editorState.selectedParts;
-
 		if (parts.length < 2) {
 			alert('Select at least 2 parts for CSG operations');
 			return;
 		}
-
 		const [partA, partB] = parts;
 
+		// Convert each Three.js part into a Manifold
+		// Each part gets a unique numeric ID
 		const manifoldA = manifoldFromObject(partA.object3D);
 		const manifoldB = manifoldFromObject(partB.object3D);
 
-		let resultGeometry: THREE.BufferGeometry;
+		// Run the CSG union
+		let resultManifold: any;
 		try {
-			resultGeometry = mesh2geometry(ManifoldClass.union(manifoldA, manifoldB).getMesh());
+			resultManifold = ManifoldClass.union(manifoldA, manifoldB);
 		} catch (e) {
 			alert('CSG operation failed: ' + e);
 			return;
 		}
 
-		const resultMesh = new THREE.Mesh(
-			resultGeometry,
-			partA.object3D instanceof THREE.Mesh
-				? (partA.object3D.material as THREE.Material).clone()
-				: new THREE.MeshStandardMaterial({ color: 0xa0a0a0 })
+		// Convert back to Three.js, keeping both materials
+		// The result mesh has triangle runs tagged with each source part's ID
+		// manifoldResultToThreeJS reads those IDs and gives us the right materials
+		const resultMeshData = resultManifold.getMesh();
+		const { rawGeometry, materials, groups } = manifoldResultToThreeJS(
+			resultMeshData,
+			manifoldMaterialMap
 		);
 
-		resultMesh.material.flatShading = true;
-		resultMesh.material.needsUpdate = true;
-
-		// Recompute normals
-		resultMesh.geometry.deleteAttribute('normal');
-		resultMesh.geometry.computeVertexNormals();
-
 		// Clean up geometry
-		const cleanGeometry = BufferGeometryUtils.mergeVertices(resultMesh.geometry, 0.0001);
+		const cleanGeometry = BufferGeometryUtils.mergeVertices(rawGeometry, 0.0001);
+		for (const g of groups) {
+			cleanGeometry.addGroup(g.start, g.count, g.materialIndex);
+		}
 		cleanGeometry.computeVertexNormals();
-		resultMesh.geometry = cleanGeometry;
 
-		// Create part
+		// Build the Three.js mesh
+		const matArray =
+			materials.length > 0 ? materials : [new THREE.MeshStandardMaterial({ color: 0xa0a0a0 })];
+		const resultMesh = new THREE.Mesh(cleanGeometry, matArray);
+		for (const mat of matArray) {
+			mat.flatShading = true;
+			mat.needsUpdate = true;
+		}
+
+		// Register the new combined part
 		const id = partId();
 		resultMesh.userData.partId = id;
 		const newPart = editorState.addPart({
@@ -689,7 +986,7 @@
 		editorState.select(id);
 		scene.add(resultMesh);
 
-		// Calculate CSG offsets for original parts
+		// Track offsets for future CSG operations
 		resultMesh.updateMatrixWorld();
 		const inverseMatrix = new THREE.Matrix4().copy(resultMesh.matrixWorld).invert();
 		partA.CSGOffset = partA.object3D
@@ -698,61 +995,67 @@
 		partB.CSGOffset = partB.object3D
 			.getWorldPosition(new THREE.Vector3())
 			.applyMatrix4(inverseMatrix);
-
 		newPart.CSGHistory = [partA, partB];
 
-		// Remove original parts
+		// Remove the original parts
 		scene.remove(partA.object3D);
 		scene.remove(partB.object3D);
 		editorState.removePart(partA.id);
 		editorState.removePart(partB.id);
 
-		// Center mesh to geometry
+		// Center the result
 		setOriginToGeometryCenter(resultMesh);
 	}
 
+	/**
+	 * Subtract partB from partA. The result keeps materials from both parts.
+	 */
 	function subtract() {
-		if (!ManifoldClass) {
-			return;
-		}
+		if (!ManifoldClass) return;
 
 		if (editorState.selectedParts.length !== 2) {
 			alert('Select exactly 2 parts for CSG operations');
 			return;
 		}
-
 		const [partA, partB] = editorState.selectedParts;
 
+		// Convert each part into a Manifold
 		const manifoldA = manifoldFromObject(partA.object3D);
 		const manifoldB = manifoldFromObject(partB.object3D);
 
-		let resultGeometry: THREE.BufferGeometry;
+		// Run the CSG difference
+		let resultManifold: any;
 		try {
-			resultGeometry = mesh2geometry(ManifoldClass.difference(manifoldA, manifoldB).getMesh());
+			resultManifold = ManifoldClass.difference(manifoldA, manifoldB);
 		} catch (e) {
 			alert('CSG operation failed: ' + e);
 			return;
 		}
 
-		const resultMesh = new THREE.Mesh(
-			resultGeometry,
-			partB.object3D instanceof THREE.Mesh
-				? (partB.object3D.material as THREE.Material).clone()
-				: new THREE.MeshStandardMaterial({ color: 0xa0a0a0 })
+		// Convert back to Three.js, keeping materials
+		const resultMeshData = resultManifold.getMesh();
+		const { rawGeometry, materials, groups } = manifoldResultToThreeJS(
+			resultMeshData,
+			manifoldMaterialMap
 		);
 
-		resultMesh.material.flatShading = true;
-		resultMesh.material.needsUpdate = true;
-
-		// Recompute normals
-		resultMesh.geometry.deleteAttribute('normal');
-		resultMesh.geometry.computeVertexNormals();
-
 		// Clean up geometry
-		const cleanGeometry = BufferGeometryUtils.mergeVertices(resultMesh.geometry, 0.0001);
+		const cleanGeometry = BufferGeometryUtils.mergeVertices(rawGeometry, 0.0001);
+		for (const g of groups) {
+			cleanGeometry.addGroup(g.start, g.count, g.materialIndex);
+		}
 		cleanGeometry.computeVertexNormals();
-		resultMesh.geometry = cleanGeometry;
 
+		// Build the Three.js mesh
+		const matArray =
+			materials.length > 0 ? materials : [new THREE.MeshStandardMaterial({ color: 0xa0a0a0 })];
+		const resultMesh = new THREE.Mesh(cleanGeometry, matArray);
+		for (const mat of matArray) {
+			mat.flatShading = true;
+			mat.needsUpdate = true;
+		}
+
+		// Register the new part
 		const id = partId();
 		resultMesh.userData.partId = id;
 		const newPart = editorState.addPart({
@@ -762,9 +1065,9 @@
 			object3D: resultMesh
 		});
 		editorState.select(id);
-
 		scene.add(resultMesh);
 
+		// Track offsets
 		resultMesh.updateMatrixWorld();
 		const inverseMatrix = new THREE.Matrix4().copy(resultMesh.matrixWorld).invert();
 		partA.CSGOffset = partA.object3D
@@ -773,15 +1076,15 @@
 		partB.CSGOffset = partB.object3D
 			.getWorldPosition(new THREE.Vector3())
 			.applyMatrix4(inverseMatrix);
-
 		newPart.CSGHistory = [partA, partB];
 
+		// Remove originals
 		scene.remove(partA.object3D);
 		scene.remove(partB.object3D);
 		editorState.removePart(partA.id);
 		editorState.removePart(partB.id);
 
-		// Center mesh to geometry
+		// Center
 		setOriginToGeometryCenter(resultMesh);
 	}
 
@@ -789,17 +1092,20 @@
 		if (!scene) return;
 
 		const parts = editorState.selectedParts;
-		if (parts.length !== 2) {
-			alert('Select exactly 2 parts to create a constraint');
+		const faces = editorState.selectedFaces;
+
+		if (parts.length !== 2 || faces.length !== 2) {
+			alert('Select exactly 2 faces to create a constraint');
 			return;
 		}
 
 		const [partA, partB] = parts;
+		const [faceDataA, faceDataB] = faces;
 
-		const posA = getFaceWorldPosition(partA.object3D, 'top', new THREE.Vector3());
-		const posB = getFaceWorldPosition(partB.object3D, 'top', new THREE.Vector3());
+		const posA = getFaceCenterWorld(faceDataA.mesh, faceDataA.faceIndex);
+		const posB = getFaceCenterWorld(faceDataB.mesh, faceDataB.faceIndex);
 
-		const sphereGeo = new THREE.SphereGeometry(0.08, 8, 8);
+		const sphereGeo = new THREE.SphereGeometry(0.025, 8, 8);
 		const sphereMat = new THREE.MeshBasicMaterial({
 			color: 0xff4444,
 			depthTest: false,
@@ -812,7 +1118,7 @@
 
 		const lineGeo = new THREE.BufferGeometry().setFromPoints([posA, posB]);
 		const lineMat = new THREE.LineBasicMaterial({
-			color: 0xff4444,
+			color: 0x0044ff,
 			depthTest: false,
 			depthWrite: false
 		});
@@ -833,8 +1139,8 @@
 			type: 'constraint',
 			partAId: partA.id,
 			partBId: partB.id,
-			faceA: 'top',
-			faceB: 'top',
+			faceA: 'selected',
+			faceB: 'selected',
 			offsetA: new THREE.Vector3(),
 			offsetB: new THREE.Vector3(),
 			constraintType: 'fixed',
@@ -855,6 +1161,11 @@
 
 <div class="flex flex-col gap-5 p-3">
 	<div>
+		<div class="border">
+			<div class="w-fit border-r {selectionMode === 'part' ? 'bg-blue-500' : ''}">Parts</div>
+			<div class="w-fit {selectionMode === 'face' ? 'bg-blue-500' : ''}">Faces</div>
+		</div>
+
 		<div class="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
 			Primitives
 		</div>
@@ -937,6 +1248,42 @@
 			>
 				<Link2 class="h-4 w-4" />
 				<span>Fixed</span>
+			</button>
+		</div>
+	</div>
+
+	<div>
+		<div class="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+			Isolation
+		</div>
+		<div class="flex flex-wrap gap-1.5">
+			<button
+				onclick={toggleIsolation}
+				class="flex items-center gap-1.5 rounded px-3 py-2 text-xs {isolationEnabled
+					? 'bg-accent text-accent-foreground'
+					: 'text-muted-foreground hover:bg-accent hover:text-foreground'}"
+			>
+				{#if isolationEnabled}
+					<EyeOff class="h-4 w-4" />
+				{:else}
+					<Eye class="h-4 w-4" />
+				{/if}
+				<span>{isolationEnabled ? 'On' : 'Off'}</span>
+			</button>
+			<button
+				onclick={toggleIsolateSelected}
+				disabled={!isolationEnabled}
+				class="flex items-center gap-1.5 rounded px-3 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+			>
+				<EyeOff class="h-4 w-4" />
+				<span>Toggle</span>
+			</button>
+			<button
+				onclick={toggleIsolationMode}
+				disabled={!isolationEnabled}
+				class="flex items-center gap-1.5 rounded px-3 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+			>
+				<span>{isolationMode === 'hidden' ? 'Hidden' : 'Ghost'}</span>
 			</button>
 		</div>
 	</div>
