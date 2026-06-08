@@ -24,7 +24,13 @@
 		Minus,
 		Link2,
 		Eye,
-		EyeOff
+		EyeOff,
+		Undo2,
+		Redo2,
+		Copy,
+		Scissors,
+		ClipboardPaste,
+		Trash2
 	} from '@lucide/svelte';
 
 	const RES_W = 320;
@@ -51,6 +57,7 @@
 	let mousePos = new THREE.Vector2();
 
 	let selectionMode: 'part' | 'face' = $state('part');
+	let currentTool: 'select' | 'move' | 'rotate' | 'scale' = $state('select');
 
 	const FACE_NORMALS: Record<string, THREE.Vector3> = {
 		top: new THREE.Vector3(0, 1, 0),
@@ -192,6 +199,9 @@
 	let isolationMode = $state<IsolationMode>('transparent');
 	let isolatedIds: string[] = $state([]);
 
+	// --- Context Menu ---
+	let contextMenu = $state({ visible: false, x: 0, y: 0, partId: '' });
+
 	function visibleParts() {
 		if (!isolationEnabled) return editorState.parts;
 		return editorState.parts.filter((p) => isolatedIds.includes(p.id));
@@ -212,6 +222,83 @@
 
 	function toggleIsolationMode() {
 		isolationMode = isolationMode === 'hidden' ? 'transparent' : 'hidden';
+	}
+
+	// --- Context Menu & Clipboard ---
+	function showContextMenu(e: MouseEvent, partId: string) {
+		e.preventDefault();
+		editorState.select(partId);
+		contextMenu = { visible: true, x: e.clientX, y: e.clientY, partId };
+	}
+
+	function hideContextMenu() {
+		contextMenu = { visible: false, x: 0, y: 0, partId: '' };
+	}
+
+	function contextCopy() {
+		editorState.copySelected();
+		hideContextMenu();
+	}
+
+	function contextCut() {
+		editorState.cutSelected();
+		hideContextMenu();
+	}
+
+	function contextPaste() {
+		pasteFromClipboard();
+		hideContextMenu();
+	}
+
+	function contextDelete() {
+		editorState.pushUndo();
+		for (const id of [...editorState.selectedIds]) {
+			const part = editorState.parts.find((p) => p.id === id);
+			if (part && part.object3D.parent) {
+				part.object3D.parent.remove(part.object3D);
+			}
+			editorState.removePart(id);
+		}
+		hideContextMenu();
+	}
+
+	function pasteFromClipboard() {
+		const entries = editorState.getClipboardEntries();
+		if (entries.length === 0) return;
+		editorState.pushUndo();
+		editorState.deselectAll();
+		for (const entry of entries) {
+			let geometry: THREE.BufferGeometry;
+			switch (entry.geometryType) {
+				case 'SphereGeometry':
+					geometry = new THREE.SphereGeometry(0.5, 12, 8);
+					break;
+				case 'CylinderGeometry':
+					geometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 8);
+					break;
+				case 'ConeGeometry':
+					geometry = new THREE.ConeGeometry(0.5, 1, 8);
+					break;
+				case 'TorusGeometry':
+					geometry = new THREE.TorusGeometry(0.5, 0.2, 8, 12);
+					break;
+				case 'PlaneGeometry':
+					geometry = new THREE.PlaneGeometry(1, 1);
+					break;
+				default:
+					geometry = new THREE.BoxGeometry(1, 1, 1);
+			}
+			const material = new THREE.MeshStandardMaterial({ color: 0xa0a0a0 });
+			const mesh = new THREE.Mesh(geometry, material);
+			mesh.position.set(entry.position.x + 1, entry.position.y, entry.position.z + 1);
+			mesh.rotation.set(entry.rotation.x, entry.rotation.y, entry.rotation.z);
+			mesh.scale.set(entry.scale.x, entry.scale.y, entry.scale.z);
+			const id = partId();
+			mesh.userData.partId = id;
+			editorState.addPart({ id, name: entry.name + ' (copy)', type: 'part', object3D: mesh });
+			editorState.toggleSelect(id);
+			scene.add(mesh);
+		}
 	}
 
 	$effect(() => {
@@ -406,11 +493,74 @@
 				if (event.key === 'Escape') {
 					console.log('esc pressed');
 					editorState.deselectAll();
+					hideContextMenu();
 				}
 
 				if (event.key === 'Tab') {
 					event.preventDefault();
 					selectionMode = selectionMode === 'part' ? 'face' : 'part';
+				}
+
+				if (event.key === 'i') {
+					// Add currently selected to isolation list
+					isolatedIds = [...editorState.selectedIds];
+
+					toggleIsolation();
+				}
+
+				if (event.key === '1') {
+					currentTool = 'select';
+					transformControls.detach();
+				} else if (event.key === '2') {
+					currentTool = 'move';
+					if (editorState.firstSelectedNode?.type === 'part') {
+						transformControls.attach(editorState.firstSelectedNode.object3D);
+						transformControls.setMode('translate');
+					}
+				} else if (event.key === '3') {
+					currentTool = 'rotate';
+					if (editorState.firstSelectedNode?.type === 'part') {
+						transformControls.attach(editorState.firstSelectedNode.object3D);
+						transformControls.setMode('rotate');
+					}
+				} else if (event.key === '4') {
+					currentTool = 'scale';
+					if (editorState.firstSelectedNode?.type === 'part') {
+						transformControls.attach(editorState.firstSelectedNode.object3D);
+						transformControls.setMode('scale');
+					}
+				}
+
+				// Ctrl shortcuts
+				if (event.ctrlKey || event.metaKey) {
+					if (event.key === 'c') {
+						event.preventDefault();
+						editorState.copySelected();
+					} else if (event.key === 'v') {
+						event.preventDefault();
+						pasteFromClipboard();
+					} else if (event.key === 'x') {
+						event.preventDefault();
+						editorState.cutSelected();
+					} else if (event.key === 'z') {
+						event.preventDefault();
+						editorState.undo();
+					} else if (event.key === 'y') {
+						event.preventDefault();
+						editorState.redo();
+					}
+				}
+
+				// Delete key
+				if (event.key === 'Delete' && editorState.selectedIds.length > 0) {
+					editorState.pushUndo();
+					for (const id of [...editorState.selectedIds]) {
+						const part = editorState.parts.find((p) => p.id === id);
+						if (part && part.object3D.parent) {
+							part.object3D.parent.remove(part.object3D);
+						}
+						editorState.removePart(id);
+					}
 				}
 			}
 
@@ -558,6 +708,7 @@
 
 		transformControls.addEventListener('mouseDown', () => {
 			controls.enabled = false;
+			editorState.pushUndo();
 		});
 		transformControls.addEventListener('mouseUp', () => {
 			controls.enabled = true;
@@ -1154,6 +1305,8 @@
 	}
 </script>
 
+<svelte:window onclick={hideContextMenu} />
+
 <div
 	bind:this={container}
 	class="flex h-full items-center justify-center overflow-hidden bg-[#87ceeb]"
@@ -1164,6 +1317,32 @@
 		<div class="border">
 			<div class="w-fit border-r {selectionMode === 'part' ? 'bg-blue-500' : ''}">Parts</div>
 			<div class="w-fit {selectionMode === 'face' ? 'bg-blue-500' : ''}">Faces</div>
+		</div>
+
+		<div class="border">
+			<div class="w-fit {currentTool === 'select' ? 'bg-blue-500' : ''}">Select</div>
+			<div class="w-fit {currentTool === 'move' ? 'bg-blue-500' : ''}">Move</div>
+			<div class="w-fit {currentTool === 'rotate' ? 'bg-blue-500' : ''}">Rotate</div>
+			<div class="w-fit {currentTool === 'scale' ? 'bg-blue-500' : ''}">Scale</div>
+		</div>
+
+		<div class="my-2 flex gap-1">
+			<button
+				onclick={() => editorState.undo()}
+				disabled={!editorState.canUndo}
+				class="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+				title="Undo (Ctrl+Z)"
+			>
+				<Undo2 class="h-3.5 w-3.5" />
+			</button>
+			<button
+				onclick={() => editorState.redo()}
+				disabled={!editorState.canRedo}
+				class="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+				title="Redo (Ctrl+Y)"
+			>
+				<Redo2 class="h-3.5 w-3.5" />
+			</button>
 		</div>
 
 		<div class="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
@@ -1288,3 +1467,50 @@
 		</div>
 	</div>
 </div>
+
+{#if contextMenu.visible}
+	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+	<div
+		role="menu"
+		tabindex="-1"
+		class="fixed z-50 min-w-[160px] rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+		style="left: {contextMenu.x}px; top: {contextMenu.y}px;"
+		onclick={(e) => e.stopPropagation()}
+		oncontextmenu={(e) => e.preventDefault()}
+	>
+		<button
+			onclick={contextCopy}
+			class="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-xs hover:bg-accent hover:text-accent-foreground"
+		>
+			<Copy class="h-3.5 w-3.5" />
+			<span>Copy</span>
+			<span class="ml-auto text-muted-foreground">Ctrl+C</span>
+		</button>
+		<button
+			onclick={contextCut}
+			class="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-xs hover:bg-accent hover:text-accent-foreground"
+		>
+			<Scissors class="h-3.5 w-3.5" />
+			<span>Cut</span>
+			<span class="ml-auto text-muted-foreground">Ctrl+X</span>
+		</button>
+		<button
+			onclick={contextPaste}
+			disabled={!editorState.hasClipboard}
+			class="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-xs hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40"
+		>
+			<ClipboardPaste class="h-3.5 w-3.5" />
+			<span>Paste</span>
+			<span class="ml-auto text-muted-foreground">Ctrl+V</span>
+		</button>
+		<div class="my-1 h-px bg-muted"></div>
+		<button
+			onclick={contextDelete}
+			class="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-xs text-destructive hover:bg-destructive hover:text-destructive-foreground"
+		>
+			<Trash2 class="h-3.5 w-3.5" />
+			<span>Delete</span>
+			<span class="ml-auto text-muted-foreground">Del</span>
+		</button>
+	</div>
+{/if}
