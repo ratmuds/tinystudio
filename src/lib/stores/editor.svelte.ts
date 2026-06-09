@@ -53,7 +53,79 @@ type ClipboardEntry = {
 	geometryType: string;
 };
 
+export class Model {
+	id = crypto.randomUUID();
+	name = 'Model';
+	parts: PartNode[] = [];
+	constraints: ConstraintNode[] = [];
+}
+
+class GameAssets {
+	models = $state<Model[]>([]);
+
+	addModel(model: Model) {
+		this.models = [...this.models, model];
+	}
+
+	getModel(id: string): Model | undefined {
+		return this.models.find((m) => m.id === id);
+	}
+
+	removeModel(id: string) {
+		this.models = this.models.filter((m) => m.id !== id);
+	}
+
+	updateModel(updated: Model) {
+		this.models = this.models.map((m) => (m.id === updated.id ? updated : m));
+	}
+}
+
+class Editor {
+	tabs: EditorState[] = $state([]);
+	activeTabIndex = $state(0);
+
+	constructor() {
+		const sceneTab = new EditorState();
+		sceneTab.name = 'Scene';
+		sceneTab.type = 'scene';
+
+		const modelTab = new EditorState();
+		modelTab.name = 'Model';
+		modelTab.type = 'model';
+
+		this.tabs = [sceneTab, modelTab];
+		this.activeTabIndex = 1;
+	}
+
+	get activeTab(): EditorState {
+		return this.tabs[this.activeTabIndex];
+	}
+
+	switchTab(type: 'scene' | 'model') {
+		const idx = this.tabs.findIndex((t) => t.type === type);
+		if (idx !== -1) this.activeTabIndex = idx;
+	}
+
+	addTab() {
+		this.tabs = [...this.tabs, new EditorState()];
+		this.activeTabIndex = this.tabs.length - 1;
+	}
+
+	closeTab(index: number) {
+		if (index < 0 || index >= this.tabs.length) return;
+		this.tabs = this.tabs.filter((_, i) => i !== index);
+		if (this.activeTabIndex >= this.tabs.length) {
+			this.activeTabIndex = this.tabs.length - 1;
+		}
+	}
+}
+
 class EditorState {
+	name = $state('Untitled');
+	type = $state<'scene' | 'model'>('model');
+	icon = $state('cube');
+	editorId = crypto.randomUUID();
+
 	parts = $state<PartNode[]>([]);
 	constraints = $state<ConstraintNode[]>([]);
 	selectedIds = $state<string[]>([]);
@@ -250,4 +322,24 @@ class EditorState {
 	}
 }
 
-export const editorState = new EditorState();
+export const editor = new Editor();
+
+export const editorState: EditorState = new Proxy({} as EditorState, {
+	get(_, prop, receiver) {
+		const target = editor.activeTab;
+		if (!target) return undefined;
+		return Reflect.get(target, prop, target);
+	},
+	set(_, prop, value) {
+		const target = editor.activeTab;
+		if (!target) return false;
+		return Reflect.set(target, prop, value, target);
+	},
+	has(_, prop) {
+		const target = editor.activeTab;
+		if (!target) return false;
+		return Reflect.has(target, prop);
+	}
+});
+
+export const gameAssets = new GameAssets();
