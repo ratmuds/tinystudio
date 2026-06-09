@@ -2,7 +2,14 @@
 	import { onMount } from 'svelte';
 	import * as THREE from 'three';
 	import Renderer, { type RendererContext } from '$lib/components/editor/Renderer.svelte';
-	import { gameAssets, editorState, type Model, type PartNode } from '$lib/stores/editor.svelte';
+	import {
+		gameAssets,
+		editorState,
+		type Model,
+		type PartNode,
+		EditorState,
+		editor
+	} from '$lib/stores/editor.svelte';
 
 	const RES_W = 320;
 	const RES_H = 240;
@@ -15,6 +22,13 @@
 		leaves: 0x5da13d,
 		sun: 0xffee88
 	};
+
+	const sceneTab = new EditorState();
+	sceneTab.name = 'Scene';
+	sceneTab.type = 'scene';
+
+	editor.addTab(sceneTab);
+	editor.switchTab('scene');
 
 	const scene = new THREE.Scene();
 	const camera = new THREE.PerspectiveCamera(60, RES_W / RES_H, 0.1, 1000);
@@ -37,22 +51,29 @@
 	}
 
 	function spawnModel(model: Model) {
+		const id = partId();
 		const group = new THREE.Group();
 		group.name = model.name;
 		group.userData.isSpawnedModel = true;
 		group.userData.modelId = model.id;
+		group.userData.partId = id;
 
 		for (const part of model.parts) {
 			const clone = part.object3D.clone(true);
 			clone.userData = { ...part.object3D.userData };
+			// Ensure children also have partId for raycasting hit detection if needed
+			clone.traverse((child) => {
+				child.userData.partId = id;
+				if (child instanceof THREE.Mesh) {
+					child.castShadow = true;
+					child.receiveShadow = true;
+				}
+			});
 			group.add(clone);
 		}
 
 		group.position.set(spawnOffset, 0, 0);
 		spawnOffset += 2;
-
-		const id = partId();
-		group.userData.partId = id;
 
 		editorState.addPart({
 			id,
@@ -93,6 +114,10 @@
 		studTop.castShadow = true;
 		studTop.receiveShadow = true;
 		stud.add(studTop);
+		const studId = partId();
+		stud.userData.partId = studId;
+		stud.traverse((c) => (c.userData.partId = studId));
+		editorState.addPart({ id: studId, name: 'Stud', type: 'part', object3D: stud });
 		scene.add(stud);
 
 		const trunkMat = new THREE.MeshStandardMaterial({ color: COLORS.trunk });
@@ -100,6 +125,9 @@
 		trunk.position.set(2, 0.5, 2);
 		trunk.castShadow = true;
 		trunk.receiveShadow = true;
+		const trunkId = partId();
+		trunk.userData.partId = trunkId;
+		editorState.addPart({ id: trunkId, name: 'Trunk', type: 'part', object3D: trunk });
 		scene.add(trunk);
 
 		const leafMat = new THREE.MeshStandardMaterial({ color: COLORS.leaves });
@@ -109,28 +137,26 @@
 			[0.7, 2.1, -0.5],
 			[-0.3, 1.8, -0.8]
 		];
-		for (const [dx, dy, dz] of offsets) {
+		for (let i = 0; i < offsets.length; i++) {
+			const [dx, dy, dz] = offsets[i];
 			const s = 0.6 + Math.random() * 0.3;
 			const leaf = new THREE.Mesh(new THREE.SphereGeometry(s, 6, 5), leafMat);
 			leaf.position.set(2 + dx, dy, 2 + dz);
 			leaf.castShadow = true;
 			leaf.receiveShadow = true;
+			const leafId = partId();
+			leaf.userData.partId = leafId;
+			editorState.addPart({ id: leafId, name: `Leaf ${i + 1}`, type: 'part', object3D: leaf });
 			scene.add(leaf);
 		}
 
 		const sunMat = new THREE.MeshStandardMaterial({ color: COLORS.sun });
 		const sun = new THREE.Mesh(new THREE.CircleGeometry(1.2, 8), sunMat);
 		sun.position.set(-8, 6, -10);
+		const sunId = partId();
+		sun.userData.partId = sunId;
+		editorState.addPart({ id: sunId, name: 'Sun', type: 'part', object3D: sun });
 		scene.add(sun);
-
-		// Lights
-		const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
-		ambientLight.castShadow = true;
-		scene.add(ambientLight);
-		const directionalLight = new THREE.DirectionalLight(0xffffff, 2.5);
-		directionalLight.position.set(-5, 10, -5);
-		directionalLight.castShadow = true;
-		scene.add(directionalLight);
 
 		return () => {
 			for (const obj of spawnedObjects) {
@@ -147,6 +173,7 @@
 <Renderer
 	{scene}
 	{camera}
+	{editorState}
 	addLights={true}
 	backgroundColor={COLORS.sky}
 	orbitTarget={new THREE.Vector3(0, 1, 0)}
@@ -162,10 +189,22 @@
 <div class="flex flex-col gap-5 p-3">
 	<div>
 		<div class="border">
-			<div class="w-fit {currentTool === 'select' ? 'bg-blue-500' : ''}">Select</div>
-			<div class="w-fit {currentTool === 'move' ? 'bg-blue-500' : ''}">Move</div>
-			<div class="w-fit {currentTool === 'rotate' ? 'bg-blue-500' : ''}">Rotate</div>
-			<div class="w-fit {currentTool === 'scale' ? 'bg-blue-500' : ''}">Scale</div>
+			<button
+				class="w-fit {currentTool === 'select' ? 'bg-blue-500' : ''}"
+				onclick={() => (currentTool = 'select')}>Select</button
+			>
+			<button
+				class="w-fit {currentTool === 'move' ? 'bg-blue-500' : ''}"
+				onclick={() => (currentTool = 'move')}>Move</button
+			>
+			<button
+				class="w-fit {currentTool === 'rotate' ? 'bg-blue-500' : ''}"
+				onclick={() => (currentTool = 'rotate')}>Rotate</button
+			>
+			<button
+				class="w-fit {currentTool === 'scale' ? 'bg-blue-500' : ''}"
+				onclick={() => (currentTool = 'scale')}>Scale</button
+			>
 		</div>
 	</div>
 

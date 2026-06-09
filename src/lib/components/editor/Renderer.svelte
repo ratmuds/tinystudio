@@ -64,7 +64,7 @@
 	import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 	import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
 	import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-	import { editorState } from '$lib/stores/editor.svelte';
+	import { EditorState } from '$lib/stores/editor.svelte';
 
 	const RES_W = 320;
 	const RES_H = 240;
@@ -121,7 +121,8 @@
 		filterIsolated = <T extends { object: THREE.Object3D }>(hits: T[]) => hits,
 		placing = false,
 		placingObj = null as THREE.Object3D | null,
-		onEscape
+		onEscape,
+		editorState
 	}: {
 		scene: THREE.Scene;
 		camera: THREE.PerspectiveCamera;
@@ -142,6 +143,7 @@
 		placing?: boolean;
 		placingObj?: THREE.Object3D | null;
 		onEscape?: () => void;
+		editorState: EditorState;
 	} = $props();
 
 	let container: HTMLDivElement;
@@ -155,17 +157,31 @@
 
 	$effect(() => {
 		const ids = editorState.selectedIds;
+		const current = currentTool;
+		const parts = editorState.parts;
 		if (!outlinePass || !transformControls) return;
 
+		console.log('Selection update', [...ids], 'Tool:', current, 'Total parts:', parts.length);
+
 		const first = editorState.firstSelectedNode;
-		if (first && first.type === 'part') {
-			const objs = editorState.selectedParts.map((p) => p.object3D);
-			outlinePass.selectedObjects = objs;
+		const selection = editorState.selectedParts;
+		const objs = selection.map((p) => p.object3D);
+
+		if (
+			first &&
+			(first.type === 'part' || (first as any).type === 'model') &&
+			current !== 'select'
+		) {
+			console.log('Attaching transform controls to', first.object3D);
 			transformControls.attach(first.object3D);
+			const modeMap = { move: 'translate', rotate: 'rotate', scale: 'scale' };
+			transformControls.setMode((modeMap as any)[current] || 'translate');
 		} else {
-			outlinePass.selectedObjects = [];
 			transformControls.detach();
 		}
+
+		console.log('Outline objects count:', objs.length);
+		outlinePass.selectedObjects = objs;
 	});
 
 	$effect(() => {
@@ -213,6 +229,8 @@
 		renderer = new THREE.WebGLRenderer({ antialias: false });
 		renderer.setSize(RES_W, RES_H);
 		renderer.setPixelRatio(1);
+		renderer.shadowMap.enabled = true;
+		renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 		renderer.domElement.style.imageRendering = 'pixelated';
 		renderer.domElement.style.width = '100%';
 		renderer.domElement.style.height = '100%';
@@ -233,6 +251,13 @@
 			scene.add(ambientLight);
 			const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
 			directionalLight.position.set(5, 10, 7.5);
+			directionalLight.castShadow = true;
+			directionalLight.shadow.mapSize.width = 1024;
+			directionalLight.shadow.mapSize.height = 1024;
+			directionalLight.shadow.camera.left = -20;
+			directionalLight.shadow.camera.right = 20;
+			directionalLight.shadow.camera.top = 20;
+			directionalLight.shadow.camera.bottom = -20;
 			scene.add(directionalLight);
 		}
 
@@ -240,12 +265,17 @@
 		transformControls = tc;
 		scene.add(tc.getHelper());
 
+		let isTransformDragging = false;
+		let transformClicked = false;
 		tc.addEventListener('mouseDown', () => {
 			controls.enabled = false;
+			isTransformDragging = true;
+			transformClicked = true;
 			editorState.pushUndo();
 		});
 		tc.addEventListener('mouseUp', () => {
 			controls.enabled = true;
+			isTransformDragging = false;
 		});
 
 		const composer = new EffectComposer(renderer);
@@ -258,20 +288,14 @@
 		retroPass.uniforms.colorLevels.value = 12.0;
 		composer.addPass(retroPass);
 
-		const selPass = new OutlinePass(
-			new THREE.Vector2(window.innerWidth, window.innerHeight),
-			scene,
-			camera
-		);
+		const selPass = new OutlinePass(new THREE.Vector2(RES_W, RES_H), scene, camera);
 		outlinePass = selPass;
 		selPass.visibleEdgeColor = new THREE.Color(0x00bbff);
+		selPass.edgeStrength = 5.0;
+		selPass.edgeThickness = 1.0;
 		composer.addPass(selPass);
 
-		hoverOutlinePass = new OutlinePass(
-			new THREE.Vector2(window.innerWidth, window.innerHeight),
-			scene,
-			camera
-		);
+		hoverOutlinePass = new OutlinePass(new THREE.Vector2(RES_W, RES_H), scene, camera);
 		hoverOutlinePass.selectedObjects = [];
 		hoverOutlinePass.visibleEdgeColor = new THREE.Color(0xaaaaaa);
 		composer.addPass(hoverOutlinePass);
@@ -285,6 +309,8 @@
 			if (!renderer || !camera || !scene || placing) return;
 
 			const rect = renderer.domElement.getBoundingClientRect();
+			if (rect.width === 0 || rect.height === 0) return;
+
 			const mouse = new THREE.Vector2(
 				((mousePos.x - rect.left) / rect.width) * 2 - 1,
 				-((mousePos.y - rect.top) / rect.height) * 2 + 1
@@ -385,8 +411,16 @@
 
 		function handlePartClick(event: MouseEvent) {
 			if (placing) return;
+			if (transformClicked) {
+				transformClicked = false;
+				return;
+			}
 
 			const rect = renderer.domElement.getBoundingClientRect();
+			if (rect.width === 0 || rect.height === 0) return;
+
+			console.log('click', mousePos, 'rect', rect);
+
 			const mouse = new THREE.Vector2(
 				((event.clientX - rect.left) / rect.width) * 2 - 1,
 				-((event.clientY - rect.top) / rect.height) * 2 + 1
@@ -416,7 +450,10 @@
 						const hitMesh = intersects[0].object as THREE.Mesh;
 						editorState.select(part.userData.partId, faceIndex, hitMesh);
 					} else {
+						console.log('selecting part', part.userData.partId);
 						editorState.select(part.userData.partId);
+
+						console.log(editorState.selectedIds);
 					}
 				}
 			}
@@ -466,6 +503,17 @@
 			composer.render();
 		}
 		renderer.setAnimationLoop(animate);
+
+		const resizeObserver = new ResizeObserver(() => {
+			const rect = container.getBoundingClientRect();
+			if (rect.width > 0 && rect.height > 0) {
+				camera.aspect = rect.width / rect.height;
+				camera.updateProjectionMatrix();
+				renderer.setSize(rect.width, rect.height);
+				composer.setSize(rect.width, rect.height);
+			}
+		});
+		resizeObserver.observe(container);
 
 		onReady?.({ renderer, composer, controls, container, transformControls: tc });
 

@@ -6,7 +6,8 @@
 	import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 	import TWEEN from '@tweenjs/tween.js';
 	import {
-		editorState,
+		editor,
+		EditorState,
 		gameAssets,
 		type Model,
 		type PartNode,
@@ -50,6 +51,12 @@
 
 	let nextManifoldID = 1;
 	const manifoldMaterialMap = new Map<number, THREE.Material>();
+
+	const editorState = new EditorState();
+	editorState.name = 'Model';
+	editorState.type = 'model';
+
+	editor.addTab(editorState);
 
 	const scene = new THREE.Scene();
 	const camera = new THREE.PerspectiveCamera(60, RES_W / RES_H, 0.1, 1000);
@@ -845,6 +852,7 @@
 <Renderer
 	{scene}
 	{camera}
+	{editorState}
 	addLights={true}
 	backgroundColor={0x505050}
 	bind:selectionMode

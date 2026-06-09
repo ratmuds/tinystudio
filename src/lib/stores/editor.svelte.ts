@@ -84,18 +84,7 @@ class Editor {
 	tabs: EditorState[] = $state([]);
 	activeTabIndex = $state(0);
 
-	constructor() {
-		const sceneTab = new EditorState();
-		sceneTab.name = 'Scene';
-		sceneTab.type = 'scene';
-
-		const modelTab = new EditorState();
-		modelTab.name = 'Model';
-		modelTab.type = 'model';
-
-		this.tabs = [sceneTab, modelTab];
-		this.activeTabIndex = 1;
-	}
+	constructor() {}
 
 	get activeTab(): EditorState {
 		return this.tabs[this.activeTabIndex];
@@ -106,9 +95,8 @@ class Editor {
 		if (idx !== -1) this.activeTabIndex = idx;
 	}
 
-	addTab() {
-		this.tabs = [...this.tabs, new EditorState()];
-		this.activeTabIndex = this.tabs.length - 1;
+	addTab(tab: EditorState) {
+		this.tabs = [...this.tabs, tab];
 	}
 
 	closeTab(index: number) {
@@ -120,7 +108,7 @@ class Editor {
 	}
 }
 
-class EditorState {
+export class EditorState {
 	name = $state('Untitled');
 	type = $state<'scene' | 'model'>('model');
 	icon = $state('cube');
@@ -327,8 +315,20 @@ export const editor = new Editor();
 export const editorState: EditorState = new Proxy({} as EditorState, {
 	get(_, prop, receiver) {
 		const target = editor.activeTab;
-		if (!target) return undefined;
-		return Reflect.get(target, prop, target);
+		if (!target) {
+			if (prop === 'parts') return [];
+			if (prop === 'constraints') return [];
+			if (prop === 'selectedIds') return [];
+			if (prop === 'selectedFaces') return [];
+			if (prop === 'selectedParts') return [];
+			if (prop === 'selectedNodes') return [];
+			return undefined;
+		}
+		const value = Reflect.get(target, prop, target);
+		if (typeof value === 'function') {
+			return value.bind(target);
+		}
+		return value;
 	},
 	set(_, prop, value) {
 		const target = editor.activeTab;
