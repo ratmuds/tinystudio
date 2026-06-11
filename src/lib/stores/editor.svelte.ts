@@ -11,6 +11,8 @@ export type PartNode = EditorNode & {
 	object3D: THREE.Object3D;
 	CSGHistory?: PartNode[];
 	CSGOffset?: THREE.Vector3;
+	rawGeometry?: THREE.BufferGeometry;
+	materialMap?: Map<number, THREE.Material>;
 };
 
 export type ConstraintNode = EditorNode & {
@@ -60,23 +62,47 @@ export class Model {
 	constraints: ConstraintNode[] = [];
 }
 
+export class Texture {
+	id = crypto.randomUUID();
+	name = 'Texture';
+	imageData: string = '';
+	pixels: string[][] = [];
+}
+
 class GameAssets {
 	models = $state<Model[]>([]);
+	textures = $state<Texture[]>([]);
 
 	addModel(model: Model) {
 		this.models = [...this.models, model];
+	}
+
+	addTexture(texture: Texture) {
+		this.textures = [...this.textures, texture];
 	}
 
 	getModel(id: string): Model | undefined {
 		return this.models.find((m) => m.id === id);
 	}
 
+	getTexture(id: string): Texture | undefined {
+		return this.textures.find((t) => t.id === id);
+	}
+
 	removeModel(id: string) {
 		this.models = this.models.filter((m) => m.id !== id);
 	}
 
+	removeTexture(id: string) {
+		this.textures = this.textures.filter((t) => t.id !== id);
+	}
+
 	updateModel(updated: Model) {
 		this.models = this.models.map((m) => (m.id === updated.id ? updated : m));
+	}
+
+	updateTexture(updated: Texture) {
+		this.textures = this.textures.map((t) => (t.id === updated.id ? updated : t));
 	}
 }
 
@@ -84,13 +110,28 @@ class Editor {
 	tabs: EditorState[] = $state([]);
 	activeTabIndex = $state(0);
 
-	constructor() {}
+	constructor() {
+		const sceneTab = new EditorState();
+		sceneTab.name = 'Scene';
+		sceneTab.type = 'scene';
+		this.tabs = [sceneTab];
+
+		const modelTab = new EditorState();
+		modelTab.name = 'Model';
+		modelTab.type = 'model';
+		this.tabs = [...this.tabs, modelTab];
+
+		const textureTab = new EditorState();
+		textureTab.name = 'Texture';
+		textureTab.type = 'texture';
+		this.tabs = [...this.tabs, textureTab];
+	}
 
 	get activeTab(): EditorState {
 		return this.tabs[this.activeTabIndex];
 	}
 
-	switchTab(type: 'scene' | 'model') {
+	switchTab(type: 'scene' | 'model' | 'texture') {
 		const idx = this.tabs.findIndex((t) => t.type === type);
 		if (idx !== -1) this.activeTabIndex = idx;
 	}
@@ -110,7 +151,7 @@ class Editor {
 
 export class EditorState {
 	name = $state('Untitled');
-	type = $state<'scene' | 'model'>('model');
+	type = $state<'scene' | 'model' | 'texture'>('model');
 	icon = $state('cube');
 	editorId = crypto.randomUUID();
 
@@ -118,7 +159,7 @@ export class EditorState {
 	constraints = $state<ConstraintNode[]>([]);
 	selectedIds = $state<string[]>([]);
 	selectedFaces = $state<Array<{ faceIndex: number; mesh: THREE.Mesh }>>([]);
-	// ^ same order as selectedIds
+	// ^ same order as selectedIds ( multiple duplicate IDs will be in selectedIds if multiple faces of the same part are selected )
 
 	// Undo/Redo
 	private undoStack: UndoSnapshot[] = $state([]);

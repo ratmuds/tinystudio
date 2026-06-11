@@ -196,7 +196,7 @@
 			if (!mesh?.geometry) continue;
 			const faceGeo = getFaceEdgesGeometry(mesh.geometry, faceData.faceIndex);
 			if (!faceGeo) continue;
-			const edgesGeo = new THREE.EdgesGeometry(faceGeo, 0.1);
+			const edgesGeo = new THREE.EdgesGeometry(faceGeo, 0.2);
 			const highlight = new THREE.LineSegments(
 				edgesGeo,
 				new THREE.LineBasicMaterial({ color: 0x44ff44 })

@@ -3,6 +3,7 @@
 	import * as THREE from 'three';
 	import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
 	import Module from 'manifold-3d';
+	import { draggable } from '@neodrag/svelte';
 	import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 	import TWEEN from '@tweenjs/tween.js';
 	import {
@@ -52,11 +53,7 @@
 	let nextManifoldID = 1;
 	const manifoldMaterialMap = new Map<number, THREE.Material>();
 
-	const editorState = new EditorState();
-	editorState.name = 'Model';
-	editorState.type = 'model';
-
-	editor.addTab(editorState);
+	const editorState = editor.tabs.find((t) => t.type === 'model')!;
 
 	const scene = new THREE.Scene();
 	const camera = new THREE.PerspectiveCamera(60, RES_W / RES_H, 0.1, 1000);
@@ -236,6 +233,7 @@
 				default:
 					geometry = new THREE.BoxGeometry(1, 1, 1);
 			}
+			const rawGeo = geometry.clone();
 			const material = new THREE.MeshStandardMaterial({ color: 0xa0a0a0 });
 			const mesh = new THREE.Mesh(geometry, material);
 			mesh.position.set(entry.position.x + 1, entry.position.y, entry.position.z + 1);
@@ -243,7 +241,16 @@
 			mesh.scale.set(entry.scale.x, entry.scale.y, entry.scale.z);
 			const id = partId();
 			mesh.userData.partId = id;
-			editorState.addPart({ id, name: entry.name + ' (copy)', type: 'part', object3D: mesh });
+			const matMap = new Map<number, THREE.Material>();
+			matMap.set(0, material);
+			editorState.addPart({
+				id,
+				name: entry.name + ' (copy)',
+				type: 'part',
+				object3D: mesh,
+				rawGeometry: rawGeo,
+				materialMap: matMap
+			});
 			editorState.toggleSelect(id);
 			scene.add(mesh);
 		}
@@ -385,16 +392,24 @@
 
 		function onMouseDown() {
 			const mesh = placingObj as THREE.Mesh;
-			const newPart = new THREE.Mesh(
-				mesh.geometry.clone(),
-				(mesh.material as THREE.MeshStandardMaterial).clone()
-			);
+			const rawGeo = mesh.geometry.clone();
+			const clonedMat = (mesh.material as THREE.MeshStandardMaterial).clone();
+			const newPart = new THREE.Mesh(rawGeo.clone(), clonedMat);
 			newPart.position.copy(placingObj.position);
 
 			const id = partId();
 			const partName = placingObjType.charAt(0).toUpperCase() + placingObjType.slice(1);
 			newPart.userData.partId = id;
-			editorState.addPart({ id, name: partName, type: 'part', object3D: newPart });
+			const matMap = new Map<number, THREE.Material>();
+			matMap.set(0, clonedMat);
+			editorState.addPart({
+				id,
+				name: partName,
+				type: 'part',
+				object3D: newPart,
+				rawGeometry: rawGeo,
+				materialMap: matMap
+			});
 			editorState.select(id);
 
 			scene.add(newPart);
@@ -428,19 +443,40 @@
 	function handleRendererReady(ctx: RendererContext) {
 		renderer = ctx.renderer;
 
+		const studMat = new THREE.MeshStandardMaterial({ color: COLORS.stud });
+		const studTopMat = new THREE.MeshStandardMaterial({ color: COLORS.studTop });
+
+		const studBodyGeo = new THREE.BoxGeometry(0.9, 0.4, 0.9);
+		const studTopGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.08, 8);
+
+		const studBody = new THREE.Mesh(studBodyGeo, studMat);
+		studBody.position.y = -0.3;
+		const studTop = new THREE.Mesh(studTopGeo, studTopMat);
+		studTop.position.y = -0.1;
+
+		const mergedRawGeo = mergeGeometries([
+			studBodyGeo.clone().translate(0, -0.3, 0),
+			studTopGeo.clone().translate(0, -0.1, 0)
+		]);
+
+		const studRawMatMap = new Map<number, THREE.Material>();
+		studRawMatMap.set(0, studMat);
+		studRawMatMap.set(1, studTopMat);
+
 		const stud = new THREE.Group();
 		const studId = partId();
 		stud.userData.partId = studId;
-		editorState.addPart({ id: studId, name: 'Stud', type: 'part', object3D: stud });
+		editorState.addPart({
+			id: studId,
+			name: 'Stud',
+			type: 'part',
+			object3D: stud,
+			rawGeometry: mergedRawGeo,
+			materialMap: studRawMatMap
+		});
 		editorState.select(studId);
 
-		const studMat = new THREE.MeshStandardMaterial({ color: COLORS.stud });
-		const studTopMat = new THREE.MeshStandardMaterial({ color: COLORS.studTop });
-		const studBody = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.4, 0.9), studMat);
-		studBody.position.y = -0.3;
 		stud.add(studBody);
-		const studTop = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.08, 8), studTopMat);
-		studTop.position.y = -0.1;
 		stud.add(studTop);
 		scene.add(stud);
 	}
@@ -645,6 +681,13 @@
 			manifoldMaterialMap
 		);
 
+		const csgMaterialMap = new Map<number, THREE.Material>();
+		for (const g of groups) {
+			if (!csgMaterialMap.has(g.materialIndex) && materials[g.materialIndex]) {
+				csgMaterialMap.set(g.materialIndex, materials[g.materialIndex]);
+			}
+		}
+
 		const cleanGeometry = BufferGeometryUtils.mergeVertices(rawGeometry, 0.0001);
 		for (const g of groups) {
 			cleanGeometry.addGroup(g.start, g.count, g.materialIndex);
@@ -665,7 +708,9 @@
 			id,
 			name: 'CSG Result',
 			type: 'part',
-			object3D: resultMesh
+			object3D: resultMesh,
+			rawGeometry: rawGeometry.clone(),
+			materialMap: csgMaterialMap
 		});
 		editorState.select(id);
 		scene.add(resultMesh);
@@ -714,6 +759,13 @@
 			manifoldMaterialMap
 		);
 
+		const csgMaterialMap = new Map<number, THREE.Material>();
+		for (const g of groups) {
+			if (!csgMaterialMap.has(g.materialIndex) && materials[g.materialIndex]) {
+				csgMaterialMap.set(g.materialIndex, materials[g.materialIndex]);
+			}
+		}
+
 		const cleanGeometry = BufferGeometryUtils.mergeVertices(rawGeometry, 0.0001);
 		for (const g of groups) {
 			cleanGeometry.addGroup(g.start, g.count, g.materialIndex);
@@ -734,7 +786,9 @@
 			id,
 			name: 'CSG Result',
 			type: 'part',
-			object3D: resultMesh
+			object3D: resultMesh,
+			rawGeometry: rawGeometry.clone(),
+			materialMap: csgMaterialMap
 		});
 		editorState.select(id);
 		scene.add(resultMesh);
@@ -845,6 +899,73 @@
 		console.log('Model saved:', modelAsset);
 		console.log('All models:', gameAssets.models);
 	}
+
+	function applyTexture(textureId: string) {
+		if (!scene) return;
+
+		if (editorState.selectedFaces.length === 0) {
+			alert('Select faces to apply the texture to');
+			return;
+		}
+
+		const face = editorState.selectedFaces[0];
+		const part = editorState.selectedParts[0];
+		const texture = gameAssets.textures.find((t) => t.id === textureId);
+
+		if (!texture) {
+			alert('Texture not found');
+			return;
+		}
+
+		const mesh = face.mesh;
+		const geometry = mesh.geometry;
+		const groups = geometry.groups;
+
+		let groupIndex = 0;
+		if (groups && groups.length > 0) {
+			const triIndex = face.faceIndex * 3;
+			for (let i = 0; i < groups.length; i++) {
+				if (triIndex >= groups[i].start && triIndex < groups[i].start + groups[i].count) {
+					groupIndex = i;
+					break;
+				}
+			}
+		}
+
+		const loadedMap = new THREE.TextureLoader().load(texture.imageData);
+
+		let matMap = part.materialMap;
+		if (!matMap) {
+			matMap = new Map<number, THREE.Material>();
+			part.materialMap = matMap;
+		}
+
+		if (matMap.has(groupIndex)) {
+			const oldMat = matMap.get(groupIndex)!;
+			const newMat = oldMat.clone();
+			newMat.map = loadedMap;
+			newMat.needsUpdate = true;
+			matMap.set(groupIndex, newMat);
+		} else {
+			matMap.set(groupIndex, new THREE.MeshStandardMaterial({ map: loadedMap }));
+		}
+
+		const numGroups = groups && groups.length > 0 ? groups.length : 1;
+		const matArray: THREE.Material[] = [];
+		const currentMats = mesh.material;
+		for (let i = 0; i < numGroups; i++) {
+			if (matMap.has(i)) {
+				matArray.push(matMap.get(i)!);
+			} else if (Array.isArray(currentMats) && currentMats[i]) {
+				matArray.push(currentMats[i]);
+			} else if (!Array.isArray(currentMats) && currentMats) {
+				matArray.push(currentMats);
+			} else {
+				matArray.push(new THREE.MeshStandardMaterial({ color: 0xa0a0a0 }));
+			}
+		}
+		mesh.material = matArray;
+	}
 </script>
 
 <svelte:window onclick={hideContextMenu} />
@@ -900,6 +1021,32 @@
 			>
 				<Redo2 class="h-3.5 w-3.5" />
 			</button>
+		</div>
+
+		<div>
+			<div class="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+				Texture Assets ({gameAssets.textures.length})
+			</div>
+			<div class="space-y-1">
+				{#each gameAssets.textures as texture (texture.id)}
+					<div class="flex items-center justify-between gap-2 rounded border px-2 py-1 text-sm">
+						<span class="truncate">{texture.name}</span>
+						<button class="border p-2" onclick={() => applyTexture(texture.id)}>Apply</button>
+					</div>
+				{/each}
+				{#if gameAssets.textures.length === 0}
+					<p class="px-1 py-2 text-xs text-muted-foreground">No saved textures</p>
+				{/if}
+			</div>
+		</div>
+
+		<div class="relative h-96 w-96">
+			<div
+				class="absolute h-5 w-5 cursor-move rounded-full bg-blue-500 shadow"
+				use:draggable={{ axis: 'both', bounds: 'parent', grid: [5, 5] }}
+			></div>
+
+			<img src="/terrain.png" class="inline h-full w-full" />
 		</div>
 
 		<div class="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">

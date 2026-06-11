@@ -23,11 +23,7 @@
 		sun: 0xffee88
 	};
 
-	const sceneTab = new EditorState();
-	sceneTab.name = 'Scene';
-	sceneTab.type = 'scene';
-
-	editor.addTab(sceneTab);
+	const sceneTab = editor.tabs.find((t) => t.type === 'scene')!;
 	editor.switchTab('scene');
 
 	const scene = new THREE.Scene();

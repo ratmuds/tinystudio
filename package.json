@@ -29,6 +29,7 @@
 	},
 	"dependencies": {
 		"@lucide/svelte": "^1.17.0",
+		"@neodrag/svelte": "^2.3.3",
 		"@tweenjs/tween.js": "^25.0.0",
 		"manifold-3d": "^3.5.1",
 		"mode-watcher": "^1.1.0",
