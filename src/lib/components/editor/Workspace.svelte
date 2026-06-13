@@ -5,6 +5,7 @@
 	import WorldStudio from '$lib/components/editor/WorldStudio.svelte';
 	import ModelStudio from '$lib/components/editor/ModelStudio.svelte';
 	import TextureStudio from '$lib/components/editor/TextureStudio.svelte';
+	import ScriptStudio from '$lib/components/editor/ScriptStudio.svelte';
 </script>
 
 <div class="flex h-full flex-col bg-muted/20">
@@ -23,6 +24,8 @@
 					<Box class="h-3.5 w-3.5" />
 				{:else if tab.type === 'texture'}
 					<Box class="h-3.5 w-3.5" />
+				{:else if tab.type === 'script'}
+					<Box class="h-3.5 w-3.5" />
 				{/if}
 				{tab.name}
 			</button>
@@ -39,6 +42,10 @@
 
 		<div class={editor.activeTab?.type === 'texture' ? 'block' : 'hidden'}>
 			<TextureStudio />
+		</div>
+
+		<div class={editor.activeTab?.type === 'script' ? 'block' : 'hidden'}>
+			<ScriptStudio />
 		</div>
 	</div>
 </div>

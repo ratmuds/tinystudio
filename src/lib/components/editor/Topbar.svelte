@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Play, Save, Settings, Share2 } from '@lucide/svelte';
+	import { editor } from '$lib/stores/editor.svelte';
 </script>
 
 <header class="flex h-12 w-full items-center justify-between border-b bg-muted/40 px-4">
@@ -14,6 +15,7 @@
 	<div class="flex items-center gap-2">
 		<button
 			class="inline-flex h-8 items-center justify-center rounded-md px-3 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
+			onclick={editor.togglePlayTest}
 		>
 			<Play class="mr-2 h-4 w-4" />
 			Run

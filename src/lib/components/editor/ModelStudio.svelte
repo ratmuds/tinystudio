@@ -908,63 +908,132 @@
 			return;
 		}
 
-		const face = editorState.selectedFaces[0];
-		const part = editorState.selectedParts[0];
-		const texture = gameAssets.textures.find((t) => t.id === textureId);
+		const originalFace = editorState.selectedFaces[0];
+		const originalGeometry = originalFace.mesh.geometry;
 
-		if (!texture) {
-			alert('Texture not found');
-			return;
+		console.log('APPLYING TEXTURE TO FACE', originalFace.faceIndex, 'ON MESH', originalFace.mesh);
+
+		let coplanarFaces = getCoplanarFaceFaces(originalGeometry, originalFace.faceIndex);
+		const part = editorState.selectedParts[0];
+
+		console.log('Coplanar faces:', coplanarFaces);
+
+		if (!coplanarFaces) {
+			coplanarFaces = [originalFace.faceIndex];
 		}
 
-		const mesh = face.mesh;
-		const geometry = mesh.geometry;
-		const groups = geometry.groups;
+		for (const f of coplanarFaces) {
+			console.log('Applying texture to face index', f);
 
-		let groupIndex = 0;
-		if (groups && groups.length > 0) {
-			const triIndex = face.faceIndex * 3;
-			for (let i = 0; i < groups.length; i++) {
-				if (triIndex >= groups[i].start && triIndex < groups[i].start + groups[i].count) {
-					groupIndex = i;
-					break;
+			const face = { mesh: originalFace.mesh, faceIndex: f };
+			const texture = gameAssets.textures.find((t) => t.id === textureId);
+
+			if (!texture) {
+				alert('Texture not found');
+				return;
+			}
+
+			const mesh = face.mesh;
+			const geometry = mesh.geometry;
+			const groups = geometry.groups;
+
+			let groupIndex = 0;
+			if (groups && groups.length > 0) {
+				const triIndex = face.faceIndex * 3;
+				for (let i = 0; i < groups.length; i++) {
+					if (triIndex >= groups[i].start && triIndex < groups[i].start + groups[i].count) {
+						groupIndex = i;
+						break;
+					}
 				}
 			}
-		}
 
-		const loadedMap = new THREE.TextureLoader().load(texture.imageData);
+			const loadedMap = new THREE.TextureLoader().load(texture.imageData);
 
-		let matMap = part.materialMap;
-		if (!matMap) {
-			matMap = new Map<number, THREE.Material>();
-			part.materialMap = matMap;
-		}
+			let matMap = part.materialMap;
+			if (!matMap) {
+				matMap = new Map<number, THREE.Material>();
+				part.materialMap = matMap;
+			}
 
-		if (matMap.has(groupIndex)) {
-			const oldMat = matMap.get(groupIndex)!;
-			const newMat = oldMat.clone();
-			newMat.map = loadedMap;
-			newMat.needsUpdate = true;
-			matMap.set(groupIndex, newMat);
-		} else {
-			matMap.set(groupIndex, new THREE.MeshStandardMaterial({ map: loadedMap }));
-		}
-
-		const numGroups = groups && groups.length > 0 ? groups.length : 1;
-		const matArray: THREE.Material[] = [];
-		const currentMats = mesh.material;
-		for (let i = 0; i < numGroups; i++) {
-			if (matMap.has(i)) {
-				matArray.push(matMap.get(i)!);
-			} else if (Array.isArray(currentMats) && currentMats[i]) {
-				matArray.push(currentMats[i]);
-			} else if (!Array.isArray(currentMats) && currentMats) {
-				matArray.push(currentMats);
+			if (matMap.has(groupIndex)) {
+				const oldMat = matMap.get(groupIndex)!;
+				const newMat = oldMat.clone();
+				newMat.map = loadedMap;
+				newMat.needsUpdate = true;
+				matMap.set(groupIndex, newMat);
 			} else {
-				matArray.push(new THREE.MeshStandardMaterial({ color: 0xa0a0a0 }));
+				matMap.set(groupIndex, new THREE.MeshBasicMaterial({ map: loadedMap }));
+			}
+
+			const numGroups = groups && groups.length > 0 ? groups.length : 1;
+			const matArray: THREE.Material[] = [];
+			const currentMats = mesh.material;
+			for (let i = 0; i < numGroups; i++) {
+				if (matMap.has(i)) {
+					matArray.push(matMap.get(i)!);
+				} else if (Array.isArray(currentMats) && currentMats[i]) {
+					matArray.push(currentMats[i]);
+				} else if (!Array.isArray(currentMats) && currentMats) {
+					matArray.push(currentMats);
+				} else {
+					matArray.push(new THREE.MeshBasicMaterial({ color: 0xa0a0a0 }));
+				}
+			}
+			mesh.material = matArray;
+		}
+	}
+
+	function getCoplanarFaceFaces(
+		geometry: THREE.BufferGeometry,
+		faceIndex: number
+	): number[] | null {
+		const indexAttr = geometry.index;
+		const positionAttr = geometry.attributes.position;
+
+		const a = indexAttr ? indexAttr.getX(faceIndex * 3) : faceIndex * 3;
+		const b = indexAttr ? indexAttr.getY(faceIndex * 3) : faceIndex * 3 + 1;
+		const c = indexAttr ? indexAttr.getZ(faceIndex * 3) : faceIndex * 3 + 2;
+
+		const aPos = new THREE.Vector3().fromBufferAttribute(positionAttr, a);
+		const bPos = new THREE.Vector3().fromBufferAttribute(positionAttr, b);
+		const cPos = new THREE.Vector3().fromBufferAttribute(positionAttr, c);
+
+		const faceNormal = new THREE.Vector3()
+			.subVectors(bPos, aPos)
+			.cross(new THREE.Vector3().subVectors(cPos, aPos))
+			.normalize();
+
+		const d = faceNormal.dot(aPos);
+		const connectedIndices: number[] = [];
+		let facesFound = [];
+		const triCount = indexAttr ? indexAttr.count / 3 : positionAttr.count / 3;
+
+		for (let i = 0; i < triCount; i++) {
+			console.log('Checking triangle/face', i);
+
+			const ai = indexAttr ? indexAttr.getX(i * 3) : i * 3;
+			const bi = indexAttr ? indexAttr.getY(i * 3) : i * 3 + 1;
+			const ci = indexAttr ? indexAttr.getZ(i * 3) : i * 3 + 2;
+
+			const aPi = new THREE.Vector3().fromBufferAttribute(positionAttr, ai);
+			const bPi = new THREE.Vector3().fromBufferAttribute(positionAttr, bi);
+			const cPi = new THREE.Vector3().fromBufferAttribute(positionAttr, ci);
+
+			const triNormal = new THREE.Vector3()
+				.subVectors(bPi, aPi)
+				.cross(new THREE.Vector3().subVectors(cPi, aPi))
+				.normalize();
+
+			if (faceNormal.angleTo(triNormal) < 0.01 && Math.abs(triNormal.dot(aPi) - d) < 1e-4) {
+				connectedIndices.push(ai, bi, ci);
+				facesFound.push(i);
 			}
 		}
-		mesh.material = matArray;
+
+		if (connectedIndices.length < 3) return null;
+
+		return facesFound;
 	}
 </script>
 

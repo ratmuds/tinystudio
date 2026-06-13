@@ -64,6 +64,7 @@
 	import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 	import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
 	import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+	import { RapierPhysics } from 'three/addons/physics/RapierPhysics.js';
 	import { EditorState } from '$lib/stores/editor.svelte';
 
 	const RES_W = 320;
@@ -122,7 +123,8 @@
 		placing = false,
 		placingObj = null as THREE.Object3D | null,
 		onEscape,
-		editorState
+		editorState,
+		physics = false
 	}: {
 		scene: THREE.Scene;
 		camera: THREE.PerspectiveCamera;
@@ -144,6 +146,7 @@
 		placingObj?: THREE.Object3D | null;
 		onEscape?: () => void;
 		editorState: EditorState;
+		physics?: boolean;
 	} = $props();
 
 	let container: HTMLDivElement;

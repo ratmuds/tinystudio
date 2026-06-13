@@ -1,4 +1,5 @@
 import type * as THREE from 'three';
+import RAPIER from '@dimforge/rapier3d-compat';
 
 export type EditorNode = {
 	id: string;
@@ -13,6 +14,10 @@ export type PartNode = EditorNode & {
 	CSGOffset?: THREE.Vector3;
 	rawGeometry?: THREE.BufferGeometry;
 	materialMap?: Map<number, THREE.Material>;
+
+	// Play Testing Variables
+	physicsBody?: RAPIER.RigidBody;
+	physicsCollider?: RAPIER.Collider;
 };
 
 export type ConstraintNode = EditorNode & {
@@ -29,7 +34,12 @@ export type ConstraintNode = EditorNode & {
 	sphereB?: THREE.Mesh;
 };
 
-export type AnyEditorNode = PartNode | ConstraintNode;
+export type ScriptNode = EditorNode & {
+	type: 'script';
+	code: string;
+};
+
+export type AnyEditorNode = PartNode | ConstraintNode | ScriptNode;
 
 /** @deprecated Use PartNode instead */
 export type EditorPart = PartNode;
@@ -97,14 +107,22 @@ class GameAssets {
 		this.textures = this.textures.filter((t) => t.id !== id);
 	}
 
-	updateModel(updated: Model) {
-		this.models = this.models.map((m) => (m.id === updated.id ? updated : m));
-	}
-
 	updateTexture(updated: Texture) {
 		this.textures = this.textures.map((t) => (t.id === updated.id ? updated : t));
 	}
 }
+
+export const playTest = $state({
+	active: false,
+
+	scene: null as THREE.Scene | null,
+	camera: null as THREE.PerspectiveCamera | null,
+
+	physicsWorld: null as RAPIER.World | null,
+	physicsGravity: new RAPIER.Vector3(0, -9.81, 0),
+
+	parts: [] as PartNode[]
+});
 
 class Editor {
 	tabs: EditorState[] = $state([]);
@@ -125,13 +143,18 @@ class Editor {
 		textureTab.name = 'Texture';
 		textureTab.type = 'texture';
 		this.tabs = [...this.tabs, textureTab];
+
+		const scriptTab = new EditorState();
+		scriptTab.name = 'Script';
+		scriptTab.type = 'script';
+		this.tabs = [...this.tabs, scriptTab];
 	}
 
 	get activeTab(): EditorState {
 		return this.tabs[this.activeTabIndex];
 	}
 
-	switchTab(type: 'scene' | 'model' | 'texture') {
+	switchTab(type: 'scene' | 'model' | 'texture' | 'script') {
 		const idx = this.tabs.findIndex((t) => t.type === type);
 		if (idx !== -1) this.activeTabIndex = idx;
 	}
@@ -147,19 +170,29 @@ class Editor {
 			this.activeTabIndex = this.tabs.length - 1;
 		}
 	}
+
+	togglePlayTest = () => {
+		playTest.active = !playTest.active;
+		console.log(`Play test ${playTest.active ? 'started' : 'stopped'}`);
+	};
+
+	get isPlayTestActive(): boolean {
+		return playTest.active;
+	}
 }
 
 export class EditorState {
 	name = $state('Untitled');
-	type = $state<'scene' | 'model' | 'texture'>('model');
+	type = $state<'scene' | 'model' | 'texture' | 'script'>('model');
 	icon = $state('cube');
 	editorId = crypto.randomUUID();
 
 	parts = $state<PartNode[]>([]);
 	constraints = $state<ConstraintNode[]>([]);
+	scripts = $state<ScriptNode[]>([]);
 	selectedIds = $state<string[]>([]);
 	selectedFaces = $state<Array<{ faceIndex: number; mesh: THREE.Mesh }>>([]);
-	// ^ same order as selectedIds ( multiple duplicate IDs will be in selectedIds if multiple faces of the same part are selected )
+	// ^ same order as selectedIds (multiple duplicate IDs will be in selectedIds if multiple faces of the same part are selected)
 
 	// Undo/Redo
 	private undoStack: UndoSnapshot[] = $state([]);
@@ -181,6 +214,16 @@ export class EditorState {
 		return this.parts.find((p) => p.id === id) ?? this.constraints.find((c) => c.id === id);
 	}
 
+	updateNode(updated: AnyEditorNode) {
+		if (updated.type === 'part') {
+			this.parts = this.parts.map((p) => (p.id === updated.id ? updated : p));
+		} else if (updated.type === 'constraint') {
+			this.constraints = this.constraints.map((c) => (c.id === updated.id ? updated : c));
+		} else if (updated.type === 'script') {
+			this.scripts = this.scripts.map((s) => (s.id === updated.id ? updated : s));
+		}
+	}
+
 	addPart(part: PartNode): PartNode {
 		this.parts = [...this.parts, part];
 		return part;
@@ -191,9 +234,15 @@ export class EditorState {
 		return constraint;
 	}
 
+	addScript(script: ScriptNode): ScriptNode {
+		this.scripts = [...this.scripts, script];
+		return script;
+	}
+
 	removeNode(id: string) {
 		this.parts = this.parts.filter((p) => p.id !== id);
 		this.constraints = this.constraints.filter((c) => c.id !== id);
+		this.scripts = this.scripts.filter((s) => s.id !== id);
 		this.constraints = this.constraints.filter((c) => c.partAId !== id && c.partBId !== id);
 		const removeIdx = this.selectedIds.indexOf(id);
 		if (removeIdx !== -1) {
