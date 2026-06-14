@@ -39,7 +39,19 @@ export type ScriptNode = EditorNode & {
 	code: string;
 };
 
-export type AnyEditorNode = PartNode | ConstraintNode | ScriptNode;
+export type CameraNode = EditorNode & {
+	type: 'camera';
+	perspective: THREE.PerspectiveCamera;
+	fov: number;
+	near: number;
+	far: number;
+};
+
+export type AnyEditorNode = PartNode | ConstraintNode | ScriptNode | CameraNode;
+
+/** Node types that participate in the nested tree (anything except constraints, which are edges). */
+export type TreeNode = PartNode | ScriptNode | CameraNode;
+export type TreeNodeType = TreeNode['type'];
 
 /** @deprecated Use PartNode instead */
 export type EditorPart = PartNode;
@@ -125,8 +137,10 @@ export const playTest = $state({
 });
 
 class Editor {
+	projectName = $state('First Testing Project');
 	tabs: EditorState[] = $state([]);
 	activeTabIndex = $state(0);
+	enabled = $state(true);
 
 	constructor() {
 		const sceneTab = new EditorState();
@@ -179,6 +193,39 @@ class Editor {
 	get isPlayTestActive(): boolean {
 		return playTest.active;
 	}
+
+	saveProject() {
+		const data = JSON.stringify(this.tabs);
+
+		// Save to localStorage
+		localStorage.setItem(`PROJECT_DATA_${this.projectName}`, data);
+		console.log(`Project "${this.projectName}" saved to localStorage.`);
+	}
+
+	async loadProject(name: string) {
+		this.enabled = false;
+
+		// Wait for a second
+		await new Promise((resolve) => setTimeout(resolve, 1000));
+
+		const data = localStorage.getItem(`PROJECT_DATA_${name}`);
+		if (data) {
+			try {
+				this.tabs = JSON.parse(data);
+				this.projectName = name;
+
+				console.log(`Project "${name}" loaded from localStorage.`);
+
+				await new Promise((resolve) => setTimeout(resolve, 1000));
+
+				this.enabled = true;
+			} catch (e) {
+				console.error(`Failed to load project "${name}":`, e);
+			}
+		} else {
+			console.warn(`No project found in localStorage with name "${name}".`);
+		}
+	}
 }
 
 export class EditorState {
@@ -190,6 +237,7 @@ export class EditorState {
 	parts = $state<PartNode[]>([]);
 	constraints = $state<ConstraintNode[]>([]);
 	scripts = $state<ScriptNode[]>([]);
+	cameras = $state<CameraNode[]>([]);
 	selectedIds = $state<string[]>([]);
 	selectedFaces = $state<Array<{ faceIndex: number; mesh: THREE.Mesh }>>([]);
 	// ^ same order as selectedIds (multiple duplicate IDs will be in selectedIds if multiple faces of the same part are selected)
@@ -211,7 +259,17 @@ export class EditorState {
 	}
 
 	getNode(id: string): AnyEditorNode | undefined {
-		return this.parts.find((p) => p.id === id) ?? this.constraints.find((c) => c.id === id);
+		return (
+			this.parts.find((p) => p.id === id) ??
+			this.constraints.find((c) => c.id === id) ??
+			this.scripts.find((s) => s.id === id) ??
+			this.cameras.find((c) => c.id === id)
+		);
+	}
+
+	/** Returns all tree-participating nodes (parts, scripts, cameras) flattened. */
+	get allTreeNodes(): TreeNode[] {
+		return [...this.parts, ...this.scripts, ...this.cameras];
 	}
 
 	updateNode(updated: AnyEditorNode) {
@@ -221,6 +279,8 @@ export class EditorState {
 			this.constraints = this.constraints.map((c) => (c.id === updated.id ? updated : c));
 		} else if (updated.type === 'script') {
 			this.scripts = this.scripts.map((s) => (s.id === updated.id ? updated : s));
+		} else if (updated.type === 'camera') {
+			this.cameras = this.cameras.map((c) => (c.id === updated.id ? updated : c));
 		}
 	}
 
@@ -239,16 +299,67 @@ export class EditorState {
 		return script;
 	}
 
+	addCamera(camera: CameraNode): CameraNode {
+		this.cameras = [...this.cameras, camera];
+		return camera;
+	}
+
 	removeNode(id: string) {
 		this.parts = this.parts.filter((p) => p.id !== id);
 		this.constraints = this.constraints.filter((c) => c.id !== id);
 		this.scripts = this.scripts.filter((s) => s.id !== id);
+		this.cameras = this.cameras.filter((c) => c.id !== id);
 		this.constraints = this.constraints.filter((c) => c.partAId !== id && c.partBId !== id);
+		// Reparent any children of the removed node to the removed node's parent
+		const removed = this.getNode(id);
+		const newParent = removed?.parentId;
+		this.parts = this.parts.map((p) => (p.parentId === id ? { ...p, parentId: newParent } : p));
+		this.scripts = this.scripts.map((s) => (s.parentId === id ? { ...s, parentId: newParent } : s));
+		this.cameras = this.cameras.map((c) => (c.parentId === id ? { ...c, parentId: newParent } : c));
 		const removeIdx = this.selectedIds.indexOf(id);
 		if (removeIdx !== -1) {
 			this.selectedIds = this.selectedIds.filter((_, i) => i !== removeIdx);
 			this.selectedFaces = this.selectedFaces.filter((_, i) => i !== removeIdx);
 		}
+	}
+
+	/** Returns the immediate tree-children (parts, scripts, cameras) of the given parent. */
+	getChildren(parentId: string | undefined): TreeNode[] {
+		return this.allTreeNodes.filter((n) => n.parentId === parentId);
+	}
+
+	/** Returns the full list of descendant ids of a node, recursively. */
+	getDescendantIds(id: string): string[] {
+		const out: string[] = [];
+		const stack = [id];
+		while (stack.length) {
+			const current = stack.pop()!;
+			const kids = this.getChildren(current);
+			for (const k of kids) {
+				out.push(k.id);
+				stack.push(k.id);
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * Reparent a tree node. Prevents cycles (cannot reparent a node into one of its own descendants)
+	 * and silently no-ops on invalid input.
+	 */
+	reparent(id: string, newParentId: string | undefined): boolean {
+		if (id === newParentId) return false;
+		if (newParentId !== undefined && this.getDescendantIds(id).includes(newParentId)) return false;
+		const node = this.getNode(id);
+		if (!node || node.type === 'constraint') return false;
+		if ((node as TreeNode).parentId === newParentId) return false;
+
+		const update = <T extends TreeNode>(arr: T[]): T[] =>
+			arr.map((n) => (n.id === id ? ({ ...n, parentId: newParentId } as T) : n));
+		this.parts = update(this.parts);
+		this.scripts = update(this.scripts);
+		this.cameras = update(this.cameras);
+		return true;
 	}
 
 	removePart(id: string) {

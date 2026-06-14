@@ -22,6 +22,13 @@
 		</button>
 		<button
 			class="inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground"
+			onclick={() => editor.saveProject()}
+		>
+			<Save class="h-4 w-4" />
+		</button>
+		<button
+			class="inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground"
+			onclick={() => editor.loadProject(editor.projectName)}
 		>
 			<Save class="h-4 w-4" />
 		</button>
