@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import * as THREE from 'three';
 	import Renderer, { type RendererContext } from '$lib/components/editor/Renderer.svelte';
 	import {
@@ -177,9 +177,18 @@
 		};
 	});
 
+	let playTestRendererDiv: HTMLDivElement;
+	let activeEngine: any = null;
+	let keyDownHandler: ((e: KeyboardEvent) => void) | null = null;
+	let keyUpHandler: ((e: KeyboardEvent) => void) | null = null;
+	let keyDownCallbackIds: string[] = [];
+	let keyUpCallbackIds: string[] = [];
+
 	async function startPlayTest() {
 		playTest.active = true;
 		playTest.parts = [];
+		keyDownCallbackIds = [];
+		keyUpCallbackIds = [];
 		console.log('Play test started');
 
 		console.log('Creating play test scene...');
@@ -193,52 +202,187 @@
 		console.log('Initializing physics world for play test...');
 		playTest.physicsWorld = new RAPIER.World(playTest.physicsGravity);
 
+		keyDownHandler = (e) => {
+			if (!activeEngine || !playTest.active) return;
+			for (const id of keyDownCallbackIds) {
+				try {
+					activeEngine.global.call(id, e.key);
+				} catch (err) {
+					console.error(`Error in Lua keydown callback ${id}:`, err);
+				}
+			}
+		};
+
+		keyUpHandler = (e) => {
+			if (!activeEngine || !playTest.active) return;
+			for (const id of keyUpCallbackIds) {
+				try {
+					activeEngine.global.call(id, e.key);
+				} catch (err) {
+					console.error(`Error in Lua keyup callback ${id}:`, err);
+				}
+			}
+		};
+
+		document.addEventListener('keydown', keyDownHandler);
+		document.addEventListener('keyup', keyUpHandler);
+
 		async function initGameEngine() {
 			const lua = await factory.createEngine();
 
-			lua.global.set('printLog', (...args) => console.log(...args));
+			lua.global.set('print', (...args: any[]) => {
+				console.log(
+					'LUA:',
+					...args.map((a) => (typeof a === 'object' ? JSON.stringify(a) : String(a)))
+				);
+			});
 
-			lua.global.set('applyVelocity', (partName: string, x: number, y: number, z: number) => {
-				console.log(`applyVelocity called for part "${partName}" with velocity (${x}, ${y}, ${z})`);
-				const part = playTest.parts.find((p) => p.name === partName);
-				if (part && part.physicsBody) {
-					part.physicsBody.setLinvel({ x, y, z }, true);
+			lua.global.set('findPart', (name: string) => {
+				const part = playTest.parts.find((p) => p.name === name);
+				return part ? part.id : undefined;
+			});
+
+			lua.global.set('onKeydown', (callback: any) => {
+				const id = `__onKeydownCb_${keyDownCallbackIds.length}`;
+				lua.global.set(id, callback);
+				keyDownCallbackIds.push(id);
+				return id;
+			});
+
+			lua.global.set('onKeyup', (callback: any) => {
+				const id = `__onKeyupCb_${keyUpCallbackIds.length}`;
+				lua.global.set(id, callback);
+				keyUpCallbackIds.push(id);
+				return id;
+			});
+
+			lua.global.set('getPartProp', (id: string, key: string) => {
+				const part = playTest.parts.find((p) => p.id === id);
+				if (!part) return undefined;
+				const [prop, axis] = key.split('.');
+				if (!axis || !part.object3D) return undefined;
+				if (prop === 'position') return part.object3D.position[axis];
+				if (prop === 'rotation') return part.object3D.rotation[axis];
+				if (prop === 'scale') return part.object3D.scale[axis];
+				if (prop === 'velocity' && part.physicsBody) return part.physicsBody.linvel()[axis];
+				return undefined;
+			});
+
+			lua.global.set('setPartProp', (id: string, key: string, value: number) => {
+				const part = playTest.parts.find((p) => p.id === id);
+				if (!part) return;
+				const [prop, axis] = key.split('.');
+				if (!axis || !part.object3D) return;
+				if (prop === 'position') {
+					part.object3D.position[axis] = value;
+					return;
+				}
+				if (prop === 'rotation') {
+					part.object3D.rotation[axis] = value;
+					return;
+				}
+				if (prop === 'scale') {
+					part.object3D.scale[axis] = value;
+					return;
+				}
+				if (prop === 'velocity' && part.physicsBody) {
+					const vel = part.physicsBody.linvel();
+					vel[axis] = value;
+					part.physicsBody.setLinvel(vel, true);
 				}
 			});
 
-			await lua.doString(editorState.scripts[0].code);
+			await lua.doString(`
+local mt = {}
+mt.__index = function(self, key)
+  local vec = {position = true, velocity = true, rotation = true, scale = true}
+  if vec[key] then
+    local x = getPartProp(self._id, key .. ".x")
+    if x ~= nil then
+      return {x = x, y = getPartProp(self._id, key .. ".y"), z = getPartProp(self._id, key .. ".z")}
+    end
+  end
+  return getPartProp(self._id, key)
+end
+mt.__newindex = function(self, key, val)
+  if type(val) == "table" then
+    if val.x ~= nil then setPartProp(self._id, key .. ".x", val.x) end
+    if val.y ~= nil then setPartProp(self._id, key .. ".y", val.y) end
+    if val.z ~= nil then setPartProp(self._id, key .. ".z", val.z) end
+  else
+    setPartProp(self._id, key, val)
+  end
+end
+function find(name)
+  local id = findPart(name)
+  if id then return setmetatable({_id = id}, mt) end
+  error("part not found: " .. name)
+end
+`);
+
+			if (editorState.scripts[0]) {
+				try {
+					await lua.doString(editorState.scripts[0].code);
+				} catch (e) {
+					console.error('Lua script load error:', e);
+					lua.global.close();
+					return;
+				}
+			}
+
+			activeEngine = lua;
 
 			const mainThread: LuaThread = lua.global.get('mainThread');
 
 			function step() {
-				const { result, resultCount } = mainThread.resume();
-
-				if (result !== LuaReturn.Yield && result !== LuaReturn.Ok) {
-					console.error('Game loop crashed with result code:', result);
-					lua.global.close();
-					return;
-				}
-
-				let waitSeconds = 0;
-				if (resultCount > 0) {
-					const [first] = mainThread.getStackValues(0);
-					if (typeof first === 'number') {
-						waitSeconds = first;
-					}
-					mainThread.pop(resultCount);
-				}
-
 				if (!playTest.active) {
-					console.log('Play test stopped, closing Lua engine');
-
-					lua.global.close();
+					console.log('Play test loop stopped');
 					return;
 				}
 
-				if (waitSeconds > 0) {
-					setTimeout(step, waitSeconds * 1000);
-				} else {
-					requestAnimationFrame(step);
+				if (!mainThread) {
+					console.warn('No mainThread found in Lua engine');
+					return;
+				}
+
+				try {
+					const { result, resultCount } = mainThread.resume();
+
+					if (result === LuaReturn.Err) {
+						let errorMsg = 'unknown error';
+						if (resultCount > 0) {
+							const [first] = mainThread.getStackValues(0);
+							if (first) errorMsg = String(first);
+							mainThread.pop(resultCount);
+						}
+						console.error('Game loop crashed:', errorMsg);
+						stopPlayTest();
+						return;
+					}
+
+					if (result !== LuaReturn.Yield && result !== LuaReturn.Ok) {
+						console.error('Game loop crashed with result code:', result);
+						stopPlayTest();
+						return;
+					}
+
+					let waitSeconds = 0;
+					if (resultCount > 0) {
+						const [first] = mainThread.getStackValues(0);
+						if (typeof first === 'number') {
+							waitSeconds = first;
+						}
+						mainThread.pop(resultCount);
+					}
+
+					if (waitSeconds > 0) {
+						setTimeout(step, waitSeconds * 1000);
+					} else {
+						requestAnimationFrame(step);
+					}
+				} catch (e) {
+					console.error('Error in Lua step function:', e);
+					stopPlayTest();
 				}
 			}
 
@@ -355,6 +499,23 @@
 
 	function stopPlayTest() {
 		playTest.active = false;
+		if (keyDownHandler) document.removeEventListener('keydown', keyDownHandler);
+		if (keyUpHandler) document.removeEventListener('keyup', keyUpHandler);
+		keyDownHandler = null;
+		keyUpHandler = null;
+		keyDownCallbackIds = [];
+		keyUpCallbackIds = [];
+
+		if (activeEngine) {
+			console.log('Closing Lua engine...');
+			try {
+				activeEngine.global.close();
+			} catch (e) {
+				console.error('Error closing Lua engine:', e);
+			}
+			activeEngine = null;
+		}
+
 		if (playTest.scene) {
 			playTest.scene.traverse((obj: THREE.Object3D) => {
 				if (obj instanceof THREE.Mesh) {
@@ -374,6 +535,10 @@
 		}
 		playTest.parts = [];
 	}
+
+	onDestroy(() => {
+		stopPlayTest();
+	});
 </script>
 
 <button
@@ -404,7 +569,7 @@
 {#if playTest.active && playTest.scene && playTest.camera}
 	<div class="m-4 rounded border-2 border-green-500 p-4">
 		<p>play testing</p>
-		<div class="h-96">
+		<div bind:this={playTestRendererDiv} class="h-96">
 			<Renderer
 				scene={playTest.scene}
 				camera={playTest.camera}

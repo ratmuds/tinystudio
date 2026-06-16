@@ -508,6 +508,7 @@
 		renderer.setAnimationLoop(animate);
 
 		const resizeObserver = new ResizeObserver(() => {
+			if (!container) return;
 			const rect = container.getBoundingClientRect();
 			if (rect.width > 0 && rect.height > 0) {
 				camera.aspect = rect.width / rect.height;
@@ -521,6 +522,7 @@
 		onReady?.({ renderer, composer, controls, container, transformControls: tc });
 
 		return () => {
+			resizeObserver.disconnect();
 			clearInterval(hoverCheckInterval);
 			renderer.domElement.removeEventListener('mousemove', onMouseMovePos);
 			renderer.domElement.removeEventListener('mousedown', handlePartClick);
@@ -535,7 +537,9 @@
 			}
 			selectedFaceHighlights = [];
 			renderer.dispose();
-			container.removeChild(renderer.domElement);
+			if (container && renderer.domElement.parentNode === container) {
+				container.removeChild(renderer.domElement);
+			}
 		};
 	});
 </script>

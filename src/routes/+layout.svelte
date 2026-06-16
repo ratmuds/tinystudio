@@ -2,13 +2,19 @@
 	import './layout.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import { ModeWatcher } from 'mode-watcher';
+	import { onMount } from 'svelte';
 	import Topbar from '$lib/components/editor/Topbar.svelte';
 	import Sidebar from '$lib/components/editor/Sidebar.svelte';
 	import Workspace from '$lib/components/editor/Workspace.svelte';
 	import Properties from '$lib/components/editor/Properties.svelte';
 	import { PaneGroup, Pane, PaneResizer } from 'paneforge';
+	import { editor } from '$lib/stores/editor.svelte';
 
 	let { children } = $props();
+
+	onMount(() => {
+		editor.loadProject(editor.projectName);
+	});
 </script>
 
 <svelte:head>

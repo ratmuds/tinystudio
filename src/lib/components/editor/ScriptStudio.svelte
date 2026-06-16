@@ -26,19 +26,59 @@
 end
 
 function gameLoop()
-    local frameCount = 0
+    local part = find("Stud")
+
+local vX = 0
+local vY = 0
+  
+  onKeydown(function (key) 
+    print("pressed" .. key)
+      if (key == "w") then
+        vY = vY + 1
+      end
+
+      if (key == "s") then
+		vY = vY - 1
+	  end
+
+	  if (key == "a") then
+		vX = vX - 1
+	  end
+
+	  if (key == "d") then
+		vX = vX + 1
+	  end
+    end)
+
+	onKeyup(function (key)
+	print("released" .. key)
+
+ 	  if (key == "w") then
+		vY = vY - 1
+	  end
+
+	  if (key == "s") then
+		vY = vY + 1
+					end
+
+if (key == "a") then
+	vX = vX + 1
+end
+
+if (key == "d") then
+	vX = vX - 1
+end
+end)
+
 
     while true do
-        frameCount = frameCount + 1
+        wait(0.1)
 
-        printLog("Frame:", frameCount)
-
-        wait(1)
+		part.velocity = {x = vX * 10, y = 0, z = vY * 10}
     end
 end
 
-mainThread = coroutine.create(gameLoop)
-`,
+mainThread = coroutine.create(gameLoop)`,
 			extensions: [
 				basicSetup,
 				StreamLanguage.define(lua),

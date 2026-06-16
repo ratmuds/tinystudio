@@ -1,4 +1,4 @@
-import type * as THREE from 'three';
+import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 
 export type EditorNode = {
@@ -46,6 +46,82 @@ export type CameraNode = EditorNode & {
 	near: number;
 	far: number;
 };
+
+export type SerializedPart = {
+	id: string;
+	name: string;
+	parentId?: string;
+	type: 'part';
+	position: { x: number; y: number; z: number };
+	rotation: { x: number; y: number; z: number };
+	scale: { x: number; y: number; z: number };
+	geometryType: string;
+	color: number;
+};
+
+export type SerializedConstraint = {
+	id: string;
+	name: string;
+	type: 'constraint';
+	partAId: string;
+	partBId: string;
+	faceA: string;
+	faceB: string;
+	offsetA: { x: number; y: number; z: number };
+	offsetB: { x: number; y: number; z: number };
+	constraintType: string;
+};
+
+export type SerializedScript = {
+	id: string;
+	name: string;
+	parentId?: string;
+	type: 'script';
+	code: string;
+};
+
+export type SerializedCamera = {
+	id: string;
+	name: string;
+	parentId?: string;
+	type: 'camera';
+	fov: number;
+	near: number;
+	far: number;
+	position: { x: number; y: number; z: number };
+	rotation: { x: number; y: number; z: number };
+};
+
+export type SerializedEditorState = {
+	name: string;
+	type: 'scene' | 'model' | 'texture' | 'script';
+	icon: string;
+	editorId: string;
+	parts: SerializedPart[];
+	constraints: SerializedConstraint[];
+	scripts: SerializedScript[];
+	cameras: SerializedCamera[];
+	selectedIds: string[];
+};
+
+function createGeometryFromType(type: string): THREE.BufferGeometry {
+	switch (type) {
+		case 'BoxGeometry':
+			return new THREE.BoxGeometry(1, 1, 1);
+		case 'SphereGeometry':
+			return new THREE.SphereGeometry(0.5, 32, 16);
+		case 'CylinderGeometry':
+			return new THREE.CylinderGeometry(0.5, 0.5, 1, 32);
+		case 'ConeGeometry':
+			return new THREE.ConeGeometry(0.5, 1, 32);
+		case 'TorusGeometry':
+			return new THREE.TorusGeometry(0.5, 0.2, 16, 100);
+		case 'PlaneGeometry':
+			return new THREE.PlaneGeometry(1, 1);
+		default:
+			return new THREE.BoxGeometry(1, 1, 1);
+	}
+}
 
 export type AnyEditorNode = PartNode | ConstraintNode | ScriptNode | CameraNode;
 
@@ -195,35 +271,45 @@ class Editor {
 	}
 
 	saveProject() {
-		const data = JSON.stringify(this.tabs);
-
-		// Save to localStorage
-		localStorage.setItem(`PROJECT_DATA_${this.projectName}`, data);
-		console.log(`Project "${this.projectName}" saved to localStorage.`);
+		try {
+			const data = JSON.stringify(this.tabs.map((t) => t.serialize()));
+			localStorage.setItem(`PROJECT_DATA_${this.projectName}`, data);
+			console.log(`Project "${this.projectName}" saved to localStorage.`);
+		} catch (e) {
+			console.error(`Failed to save project "${this.projectName}":`, e);
+		}
 	}
 
 	async loadProject(name: string) {
-		this.enabled = false;
-
-		// Wait for a second
-		await new Promise((resolve) => setTimeout(resolve, 1000));
-
 		const data = localStorage.getItem(`PROJECT_DATA_${name}`);
-		if (data) {
-			try {
-				this.tabs = JSON.parse(data);
-				this.projectName = name;
-
-				console.log(`Project "${name}" loaded from localStorage.`);
-
-				await new Promise((resolve) => setTimeout(resolve, 1000));
-
-				this.enabled = true;
-			} catch (e) {
-				console.error(`Failed to load project "${name}":`, e);
-			}
-		} else {
+		if (!data) {
 			console.warn(`No project found in localStorage with name "${name}".`);
+			return;
+		}
+
+		this.enabled = false;
+		try {
+			const raw = JSON.parse(data);
+			if (!Array.isArray(raw)) {
+				console.error(`Failed to load project "${name}": data is not an array.`);
+				return;
+			}
+
+			// Deserialize each saved tab into the matching existing tab, so any
+			// `const editorState = editor.tabs.find(...)` reference stays valid.
+			for (const entry of raw) {
+				if (!entry || typeof entry !== 'object') continue;
+				const existing = this.tabs.find((t) => t.type === entry.type);
+				if (!existing) continue;
+				existing.deserialize(entry as SerializedEditorState);
+			}
+
+			this.projectName = name;
+			console.log(`Project "${name}" loaded from localStorage.`);
+		} catch (e) {
+			console.error(`Failed to load project "${name}":`, e);
+		} finally {
+			this.enabled = true;
 		}
 	}
 }
@@ -502,12 +588,154 @@ export class EditorState {
 		}
 	}
 
-	get hasClipboard(): boolean {
+	get 	hasClipboard(): boolean {
 		return this.clipboard.length > 0;
 	}
 
 	getClipboardEntries(): ClipboardEntry[] {
 		return this.clipboard;
+	}
+
+	/** Build a plain-object snapshot of this tab suitable for JSON.stringify. */
+	serialize(): SerializedEditorState {
+		return {
+			name: this.name,
+			type: this.type,
+			icon: this.icon,
+			editorId: this.editorId,
+			parts: this.parts.map((p) => {
+				const obj = p.object3D as THREE.Object3D & {
+					geometry?: { type?: string };
+					material?: { color?: { getHex?: () => number } };
+				};
+				return {
+					id: p.id,
+					name: p.name,
+					parentId: p.parentId,
+					type: 'part' as const,
+					position: { x: obj.position.x, y: obj.position.y, z: obj.position.z },
+					rotation: { x: obj.rotation.x, y: obj.rotation.y, z: obj.rotation.z },
+					scale: { x: obj.scale.x, y: obj.scale.y, z: obj.scale.z },
+					geometryType: obj.geometry?.type ?? 'BoxGeometry',
+					color: obj.material?.color?.getHex?.() ?? 0xa0a0a0
+				};
+			}),
+			constraints: this.constraints.map((c) => ({
+				id: c.id,
+				name: c.name,
+				type: 'constraint' as const,
+				partAId: c.partAId,
+				partBId: c.partBId,
+				faceA: c.faceA,
+				faceB: c.faceB,
+				offsetA: { x: c.offsetA.x, y: c.offsetA.y, z: c.offsetA.z },
+				offsetB: { x: c.offsetB.x, y: c.offsetB.y, z: c.offsetB.z },
+				constraintType: c.constraintType
+			})),
+			scripts: this.scripts.map((s) => ({
+				id: s.id,
+				name: s.name,
+				parentId: s.parentId,
+				type: 'script' as const,
+				code: s.code
+			})),
+			cameras: this.cameras.map((c) => ({
+				id: c.id,
+				name: c.name,
+				parentId: c.parentId,
+				type: 'camera' as const,
+				fov: c.fov,
+				near: c.near,
+				far: c.far,
+				position: {
+					x: c.perspective.position.x,
+					y: c.perspective.position.y,
+					z: c.perspective.position.z
+				},
+				rotation: {
+					x: c.perspective.rotation.x,
+					y: c.perspective.rotation.y,
+					z: c.perspective.rotation.z
+				}
+			})),
+			selectedIds: [...this.selectedIds]
+		};
+	}
+
+	/** Replace this tab's state from a previously-serialized snapshot. */
+	deserialize(data: SerializedEditorState) {
+		this.name = data.name;
+		this.type = data.type;
+		this.icon = data.icon;
+		this.editorId = data.editorId;
+
+		this.parts = data.parts.map((p) => {
+			const geometry = createGeometryFromType(p.geometryType);
+			const material = new THREE.MeshStandardMaterial({ color: p.color });
+			const mesh = new THREE.Mesh(geometry, material);
+			mesh.position.set(p.position.x, p.position.y, p.position.z);
+			mesh.rotation.set(p.rotation.x, p.rotation.y, p.rotation.z);
+			mesh.scale.set(p.scale.x, p.scale.y, p.scale.z);
+			mesh.userData.partId = p.id;
+			mesh.name = p.name;
+
+			return {
+				id: p.id,
+				name: p.name,
+				parentId: p.parentId,
+				type: 'part',
+				object3D: mesh,
+				materialMap: new Map<number, THREE.Material>([[0, material]])
+			} as PartNode;
+		});
+
+		this.constraints = data.constraints.map(
+			(c) =>
+				({
+					id: c.id,
+					name: c.name,
+					type: 'constraint',
+					partAId: c.partAId,
+					partBId: c.partBId,
+					faceA: c.faceA,
+					faceB: c.faceB,
+					offsetA: new THREE.Vector3(c.offsetA.x, c.offsetA.y, c.offsetA.z),
+					offsetB: new THREE.Vector3(c.offsetB.x, c.offsetB.y, c.offsetB.z),
+					constraintType: c.constraintType
+				}) as ConstraintNode
+		);
+
+		this.scripts = data.scripts.map(
+			(s) =>
+				({
+					id: s.id,
+					name: s.name,
+					parentId: s.parentId,
+					type: 'script',
+					code: s.code
+				}) as ScriptNode
+		);
+
+		this.cameras = data.cameras.map((c) => {
+			const perspective = new THREE.PerspectiveCamera(c.fov, 1, c.near, c.far);
+			perspective.position.set(c.position.x, c.position.y, c.position.z);
+			perspective.rotation.set(c.rotation.x, c.rotation.y, c.rotation.z);
+			return {
+				id: c.id,
+				name: c.name,
+				parentId: c.parentId,
+				type: 'camera',
+				perspective,
+				fov: c.fov,
+				near: c.near,
+				far: c.far
+			} as CameraNode;
+		});
+
+		this.selectedIds = [...data.selectedIds];
+		this.selectedFaces = [];
+		this.undoStack = [];
+		this.redoStack = [];
 	}
 }
 

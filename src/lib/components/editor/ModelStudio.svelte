@@ -292,6 +292,30 @@
 		}
 	});
 
+	// Keep scene.children in sync with editorState.parts. Loaded parts come back
+	// from JSON as brand-new THREE.Object3D instances, so they need to be added
+	// to the scene; parts that disappear from editorState get removed.
+	$effect(() => {
+		if (!scene) return;
+		const partIds = new Set(editorState.parts.map((p) => p.id));
+
+		for (const part of editorState.parts) {
+			if (part.object3D.parent !== scene) {
+				scene.add(part.object3D);
+			}
+		}
+
+		const toRemove: THREE.Object3D[] = [];
+		for (const child of scene.children) {
+			if (child.userData?.partId && !partIds.has(child.userData.partId)) {
+				toRemove.push(child);
+			}
+		}
+		for (const child of toRemove) {
+			scene.remove(child);
+		}
+	});
+
 	function filterIsolated<T extends { object: THREE.Object3D }>(hits: T[]): T[] {
 		if (!isolationEnabled) return hits;
 		return hits.filter((hit) => {
