@@ -1116,7 +1116,7 @@
 			</button>
 		</div>
 
-		<div>
+		<div class="mb-5">
 			<div class="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
 				Texture Assets ({gameAssets.textures.length})
 			</div>
@@ -1133,7 +1133,7 @@
 			</div>
 		</div>
 
-		<div class="relative h-96 w-96">
+		<div class="relative hidden h-96 w-96">
 			<div
 				class="absolute h-5 w-5 cursor-move rounded-full bg-blue-500 shadow"
 				use:draggable={{ axis: 'both', bounds: 'parent', grid: [5, 5] }}

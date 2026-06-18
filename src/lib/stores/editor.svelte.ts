@@ -20,6 +20,11 @@ export type PartNode = EditorNode & {
 	physicsCollider?: RAPIER.Collider;
 };
 
+export type ModelNode = EditorNode & {
+	type: 'model';
+	parts: EditorNode[];
+};
+
 export type ConstraintNode = EditorNode & {
 	type: 'constraint';
 	partAId: string;
@@ -320,6 +325,7 @@ export class EditorState {
 	icon = $state('cube');
 	editorId = crypto.randomUUID();
 
+	nodes: AnyEditorNode[] = $state([]);
 	parts = $state<PartNode[]>([]);
 	constraints = $state<ConstraintNode[]>([]);
 	scripts = $state<ScriptNode[]>([]);
@@ -588,7 +594,7 @@ export class EditorState {
 		}
 	}
 
-	get 	hasClipboard(): boolean {
+	get hasClipboard(): boolean {
 		return this.clipboard.length > 0;
 	}
 
