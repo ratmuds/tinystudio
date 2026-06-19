@@ -7,6 +7,7 @@
 		editorState,
 		type Model,
 		type PartNode,
+		type ConstraintNode,
 		EditorState,
 		editor,
 		playTest
@@ -316,6 +317,56 @@
 			playTest.parts.push(playTestPart);
 		}
 
+		// apply constraints
+		for (const constraint of editorState.constraints) {
+			const partA = playTest.parts.find((p) => p.id === constraint.partAId);
+			const partB = playTest.parts.find((p) => p.id === constraint.partBId);
+			if (!partA || !partB || !partA.physicsBody || !partB.physicsBody) continue;
+
+			const worldAnchorA = new THREE.Vector3().addVectors(
+				editorState.parts.find((p) => p.id === constraint.partAId)?.object3D.position ||
+					new THREE.Vector3(),
+				constraint.offsetA
+			);
+			const worldAnchorB = new THREE.Vector3().addVectors(
+				editorState.parts.find((p) => p.id === constraint.partBId)?.object3D.position ||
+					new THREE.Vector3(),
+				constraint.offsetB
+			);
+
+			const partRotFrameA = new THREE.Quaternion().setFromEuler(
+				new THREE.Euler(
+					(constraint.faceA === '0' ? Math.PI / 2 : 0) +
+						(constraint.constraintType === 'hinge' ? Math.PI / 2 : 0),
+					0,
+					(constraint.faceA === '1' ? -Math.PI / 2 : 0) +
+						(constraint.constraintType === 'hinge' ? Math.PI / 2 : 0)
+				)
+			);
+			const partRotFrameB = new THREE.Quaternion().setFromEuler(
+				new THREE.Euler(
+					(constraint.faceB === '0' ? Math.PI / 2 : 0) +
+						(constraint.constraintType === 'hinge' ? Math.PI / 2 : 0),
+					0,
+					(constraint.faceB === '1' ? -Math.PI / 2 : 0) +
+						(constraint.constraintType === 'hinge' ? Math.PI / 2 : 0)
+				)
+			);
+
+			const rapierConstraint = RAPIER.JointData.fixed(
+				worldAnchorA,
+				partRotFrameA,
+				worldAnchorB,
+				partRotFrameB
+			);
+			playTest.physicsWorld!.createImpulseJoint(
+				rapierConstraint,
+				partA.physicsBody,
+				partB.physicsBody,
+				true
+			);
+		}
+
 		const ambientLight = new THREE.AmbientLight(0xffffff, 1.25);
 		playTest.scene.add(ambientLight);
 		const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
@@ -373,6 +424,33 @@
 			playTest.physicsWorld = null;
 		}
 		playTest.parts = [];
+	}
+
+	function addConstraint() {
+		if (editorState.selectedIds.length !== 2) {
+			alert('Select exactly 2 parts to create a constraint');
+			return;
+		}
+
+		const [partAId, partBId] = editorState.selectedIds;
+		const [faceA, faceB] = editorState.selectedFaces;
+
+		console.log(faceA, faceB);
+
+		const newConstraintNode: ConstraintNode = {
+			id: crypto.randomUUID(),
+			name: 'Constraint',
+			type: 'constraint',
+			partAId,
+			partBId,
+			faceA: faceA.faceIndex.toString(),
+			faceB: faceB.faceIndex.toString(),
+			offsetA: new THREE.Vector3(),
+			offsetB: new THREE.Vector3(),
+			constraintType: 'fixed'
+		};
+
+		editorState.addConstraint(newConstraintNode);
 	}
 </script>
 
@@ -458,4 +536,6 @@
 			{/if}
 		</div>
 	</div>
+
+	<button onclick={() => addConstraint()} class="border p-2">do a constraint thingy!!!!!!!</button>
 </div>
