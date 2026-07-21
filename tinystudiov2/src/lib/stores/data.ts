@@ -1,18 +1,19 @@
 import * as ECS from "$lib/stores/ecs";
 
-class GameData {
+export class GameData {
     name: string = "Untitled Game";
     description: string = "";
 
     components: ECS.Component[] = []; // User-defined components in game
     systems: ECS.System[] = []; // User-defined systems in game
 
-    worlds: WorkspaceData[] = []; // Data of the words. During runtime, only one world is active at a time and data is copied from data to runtime data
+    worlds: WorldData[] = []; // All worlds in this game
+    models: ModelData[] = []; // All models in the game (reusable across worlds)
 }
 
-type WorkspaceKind = "world" | "model" | "script";
+export type WorkspaceKind = "world" | "model" | "script";
 
-class WorkspaceData {
+export class WorkspaceData {
     id: string;
     type: WorkspaceKind;
 
@@ -22,16 +23,14 @@ class WorkspaceData {
     }
 }
 
-class WorldData {
-    id: string;
-    name: string;
+export class WorldData {
+    id: string = crypto.randomUUID();
+    name: string = "Untitled World";
 
     entities: ECS.Entity[] = [];
 }
 
-class WorldWorkspaceData extends WorkspaceData {
-    id: string;
-
+export class WorldWorkspaceData extends WorkspaceData {
     worldData: WorldData;
 
     // If faces are being selected, the entities and faces list will be matched by index, so if two faces of the same entity are selected, the entity ID will appear twice in the list, and the face IDs will be in the same order as the entity IDs.
@@ -39,7 +38,29 @@ class WorldWorkspaceData extends WorkspaceData {
     selectedEntities: string[] = []; // List of selected entity IDs
     selectedFaces: string[] = []; // List of selected face IDs
 
-    constructor(id: string) {
-        super(id, "world");
+    constructor(worldData?: WorldData, id?: string) {
+        super(id || crypto.randomUUID(), "world");
+        this.worldData = worldData || new WorldData();
+    }
+}
+
+export class ModelData {
+    id: string;
+    name: string;
+
+    entities: ECS.Entity[] = [];
+
+    constructor(name: string, id?: string) {
+        this.id = id || crypto.randomUUID();
+        this.name = name;
+    }
+}
+
+export class ModelWorkspaceData extends WorkspaceData {
+    modelData: ModelData;
+
+    constructor(modelData: ModelData, id?: string) {
+        super(id || crypto.randomUUID(), "model");
+        this.modelData = modelData;
     }
 }

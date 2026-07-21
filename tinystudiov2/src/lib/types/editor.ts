@@ -19,6 +19,7 @@ export type StudioTab = {
     name: string;
     kind: "world" | "model" | "script";
     dirty: boolean;
+    dataId?: string; // References the ID of the ModelData or WorldData this tab edits
 };
 
 export type WorkspaceKind = "world" | "model" | "script";

@@ -1,15 +1,11 @@
 <script lang="ts">
     import * as THREE from "three";
-    import ModelPreview from "$lib/components/editor/sidebar/ModelPreview.svelte";
-    import MaterialPreview from "$lib/components/editor/sidebar/MaterialPreview.svelte";
+    import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
     import Vector3Input from "$lib/components/editor/sidebar/Vector3Input.svelte";
-    import RotaryInput from "$lib/components/editor/sidebar/RotaryInput.svelte";
     import RotationInput from "$lib/components/editor/sidebar/RotationInput.svelte";
-    import ProgressBar from "$lib/components/editor/ProgressBar.svelte";
     import Renderer from "$lib/components/editor/Renderer.svelte";
 
     import * as Resizable from "$lib/components/ui/resizable/index.js";
-    import * as ContextMenu from "$lib/components/ui/context-menu/index.js";
     import { Switch } from "$lib/components/ui/switch/index.js";
     import * as Tooltip from "$lib/components/ui/tooltip/index.js";
     import * as Kbd from "$lib/components/ui/kbd/index.js";
@@ -41,12 +37,166 @@
         CirclePlus,
     } from "@lucide/svelte";
 
+    import { ModelData, ModelWorkspaceData, GameData } from "$lib/stores/data";
+    import { createPartEntity, type Entity } from "$lib/stores/ecs";
+    import * as ECS from "$lib/stores/ecs";
+    import { onMount } from "svelte";
+
+    let {
+        modelData,
+        gameData,
+    }: {
+        modelData: ModelData;
+        gameData: GameData;
+    } = $props();
+
+    let workspaceData: ModelWorkspaceData = $derived(
+        new ModelWorkspaceData(modelData),
+    );
+
     let addEntityModalOpen = $state(false);
+    let saved = $state(false);
+    // ─── ECS ↔ Three.js sync ────────────────────────────────────────────
+    // Maps entity ID → Three.js mesh so we can update/remove meshes when ECS data changes.
+    const meshByEntityId = new Map<string, THREE.Mesh>();
+
+    /** Create the Three.js mesh that corresponds to an ECS Part entity. */
+    function createMeshForEntity(entity: Entity): THREE.Mesh | null {
+        const meshComp = entity.components.find((c) => c.name === "Mesh");
+        const transformComp = entity.components.find(
+            (c) => c.name === "Transform",
+        );
+
+        if (!meshComp || !transformComp) {
+            console.warn(
+                `Entity ${entity.id} missing Mesh or Transform component, skipping`,
+            );
+            return null;
+        }
+
+        const geomType = meshComp.data.geometryType.value as string;
+        const size = (meshComp.data.size?.value ?? { x: 1, y: 1, z: 1 }) as {
+            x: number;
+            y: number;
+            z: number;
+        };
+        const color = meshComp.data.color.value as number;
+
+        let geometry: THREE.BufferGeometry;
+        switch (geomType) {
+            case "sphere":
+                geometry = new THREE.SphereGeometry(size.x / 2);
+                break;
+            case "cylinder":
+                geometry = new THREE.CylinderGeometry(
+                    size.x / 2,
+                    size.x / 2,
+                    size.y,
+                );
+                break;
+            default:
+                geometry = new THREE.BoxGeometry(size.x, size.y, size.z);
+        }
+
+        const mesh = new THREE.Mesh(
+            geometry,
+            new THREE.MeshStandardMaterial({ color }),
+        );
+
+        const pos = transformComp.data.position.value as {
+            x: number;
+            y: number;
+            z: number;
+        };
+        mesh.position.set(pos.x, pos.y, pos.z);
+        mesh.userData.entityId = entity.id;
+        scene.add(mesh);
+        mesh.userData.partId = entity.id;
+        meshByEntityId.set(entity.id, mesh);
+        return mesh;
+    }
+
+    /** Create a Part entity in the ECS and spawn its 3D mesh. */
+    function createPart() {
+        const entity = ECS.createPartEntity(
+            `Part ${modelData.entities.length + 1}`,
+        );
+
+        // Randomize starting position a bit so parts don't all overlap
+        const transform = entity.components.find(
+            (c) => c.name === "Transform",
+        )!;
+        const pos = {
+            x: +(Math.random() * 4 - 2).toFixed(2),
+            y: 0.5,
+            z: +(Math.random() * 4 - 2).toFixed(2),
+        };
+        transform.data.position.value = pos;
+
+        // Randomize color so it's easy to see them
+        const mesh = entity.components.find((c) => c.name === "Mesh")!;
+        const color = new THREE.Color().setHSL(Math.random(), 0.6, 0.5);
+        mesh.data.color.value = color.getHex();
+
+        // Register in ECS data
+        modelData.entities.push(entity);
+
+        // Spawn the Three.js mesh
+        createMeshForEntity(entity);
+
+        console.log("Created part entity:", entity);
+    }
+
+    function handleSave() {
+        // TODO: persist to backend / localStorage
+        console.log("Saving model:", modelData);
+        saved = true;
+        setTimeout(() => (saved = false), 2000);
+    }
+
+    function handleEntitySelect(entityType: string) {
+        if (entityType === "Part") {
+            createPart();
+        } else if (entityType === "Camera") {
+            console.log("TODO: Create camera entity");
+            // TODO: createCameraEntity()
+        } else if (entityType === "Light") {
+            console.log("TODO: Create light entity");
+            // TODO: createLightEntity()
+        }
+        addEntityModalOpen = false;
+    }
 
     function handleKeydown(e: KeyboardEvent) {
+        // Don't trigger shortcuts when typing in inputs
+        const tag = (e.target as HTMLElement)?.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA") return;
+
         if (e.key === "a" && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();
             addEntityModalOpen = !addEntityModalOpen;
+        }
+        if (e.key === "b" && !e.metaKey && !e.ctrlKey) {
+            e.preventDefault();
+            createPart();
+        }
+
+        // Tool shortcuts
+        if (e.key === "q") currentTool = "select";
+        if (e.key === "w") currentTool = "move";
+        if (e.key === "e") currentTool = "rotate";
+        if (e.key === "r") currentTool = "scale";
+
+        // Mode toggle
+        if (e.key === "Tab") {
+            e.preventDefault();
+            selectionMode = selectionMode === "part" ? "face" : "part";
+        }
+
+        // Deselect
+        if (e.key === "Escape") {
+            selectedPartIds = [];
+            selectedFaces = [];
         }
     }
 
@@ -60,12 +210,105 @@
     camera.position.set(3, 3, 3);
     camera.lookAt(0, 0, 0);
 
-    let obj = new THREE.Mesh(
-        new THREE.BoxGeometry(1, 1, 1),
-        new THREE.MeshStandardMaterial({ color: 0x00ff00 }),
-    );
-    obj.userData.partId = "part-1"; // Assign a unique part ID
-    scene.add(obj);
+    // TransformControls are created by the Renderer component.
+    // We bind to them so we can listen for object changes.
+    let rendererTransformControls = $state<TransformControls | null>(null);
+
+    // Selection state (shared with Renderer)
+    let selectionMode = $state<"part" | "face" | "model">("part");
+    let currentTool = $state<"select" | "move" | "rotate" | "scale">("select");
+    let selectedPartIds = $state<string[]>([]);
+    let selectedFaces = $state<
+        { entityId: string; faceIndex: number; mesh: THREE.Mesh }[]
+    >([]);
+
+    onMount(() => {
+        // Create an initial Part entity if none exist
+        if (modelData.entities.length === 0) {
+            const initialPart = ECS.createPartEntity("Part 1");
+            modelData.entities.push(initialPart);
+        }
+
+        // Spawn meshes for all entities
+        for (const entity of modelData.entities) {
+            if (!meshByEntityId.has(entity.id)) {
+                createMeshForEntity(entity);
+            }
+        }
+    });
+
+    // Sync TransformControls object changes back to ECS data
+    $effect(() => {
+        const tc = rendererTransformControls;
+        if (!tc) return;
+
+        const onObjectChange = () => {
+            const selectedObject = tc.object as THREE.Mesh;
+            if (!selectedObject) return;
+            const entityId = selectedObject.userData.entityId as string;
+            const entity = modelData.entities.find((e) => e.id === entityId);
+            if (entity) {
+                const transformComp = entity.components.find(
+                    (c) => c.name === "Transform",
+                )!;
+                transformComp.data.position.value = {
+                    x: +selectedObject.position.x.toFixed(3),
+                    y: +selectedObject.position.y.toFixed(3),
+                    z: +selectedObject.position.z.toFixed(3),
+                };
+            }
+        };
+
+        tc.addEventListener("objectChange", onObjectChange);
+        return () => tc.removeEventListener("objectChange", onObjectChange);
+    });
+
+    function getSelectedPartComponents() {
+        let compTypes = new Map<string, number>(); // component name → count
+
+        // Count the number of each component type across all selected parts
+        for (const partId of selectedPartIds) {
+            const entity = modelData.entities.find((e) => e.id === partId);
+            if (!entity) continue;
+            for (const comp of entity.components) {
+                compTypes.set(comp.name, (compTypes.get(comp.name) || 0) + 1);
+            }
+        }
+
+        // Filter components that are shared
+        const components: ECS.Component[] = [];
+        const componentData = new Map<string, ECS.Component[]>(); // component name → instances
+        for (const [compName, count] of compTypes.entries()) {
+            if (count === selectedPartIds.length) {
+                // All selected parts have this component
+                const entity = modelData.entities.find(
+                    (e) => e.id === selectedPartIds[0],
+                );
+                if (!entity) continue;
+
+                const comp = entity.components.find((c) => c.name === compName);
+
+                // Store the component and its per-entity instances
+                if (comp) {
+                    components.push(comp);
+                    const instances: ECS.Component[] = [];
+                    for (const id of selectedPartIds) {
+                        const e = modelData.entities.find((x) => x.id === id);
+                        const c = e?.components.find(
+                            (x) => x.name === compName,
+                        );
+                        if (c) instances.push(c);
+                    }
+                    componentData.set(compName, instances);
+                }
+            }
+        }
+
+        return components.map((c) => ({
+            component: c,
+            data: componentData.get(c.name) ?? [],
+        }));
+    }
 </script>
 
 <svelte:document onkeydown={handleKeydown} />
@@ -75,9 +318,15 @@
     <Command.List class="mt-3">
         <Command.Empty>No results found.</Command.Empty>
         <Command.Group heading="Suggestions">
-            <Command.Item>Part</Command.Item>
-            <Command.Item>Camera</Command.Item>
-            <Command.Item>Light</Command.Item>
+            <Command.Item onselect={() => handleEntitySelect("Part")}
+                >Part</Command.Item
+            >
+            <Command.Item onselect={() => handleEntitySelect("Camera")}
+                >Camera</Command.Item
+            >
+            <Command.Item onselect={() => handleEntitySelect("Light")}
+                >Light</Command.Item
+            >
         </Command.Group>
     </Command.List>
 </Command.Dialog>
@@ -100,20 +349,15 @@
                 class="relative aspect-video w-full overflow-hidden rounded-xl border-5 border-border/60 bg-muted/40"
                 style="background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.04) 0 10px, transparent 10px 20px);"
             >
-                <Renderer {scene} {camera} />
-
-                <!--
-                <div class="absolute inset-0 flex items-center justify-center">
-                    <div
-                        class="flex flex-col items-center gap-3 text-muted-foreground"
-                    >
-                        <p class="ArrayFont text-3xl font-semibold">
-                            tinystudio
-                        </p>
-
-                        <ProgressBar />
-                    </div>
-                </div>-->
+                <Renderer
+                    {scene}
+                    {camera}
+                    bind:transformControls={rendererTransformControls}
+                    bind:selectionMode
+                    bind:currentTool
+                    bind:selectedPartIds
+                    bind:selectedFaces
+                />
             </div>
 
             <div class="flex items-center gap-3">
@@ -121,7 +365,11 @@
                     <Tooltip.Provider>
                         <Tooltip.Root>
                             <Tooltip.Trigger
-                                class="rounded-md bg-background px-3 py-3 text-sm font-bold tracking-wide text-green-500 shadow-sm duration-150"
+                                onclick={() => (currentTool = "select")}
+                                class="rounded-md px-3 py-3 text-sm font-bold tracking-wide shadow-sm duration-150 {currentTool ===
+                                'select'
+                                    ? 'bg-background text-green-500'
+                                    : 'hover:bg-background/50'}"
                                 ><MousePointer2
                                     class="h-4 w-4"
                                 /></Tooltip.Trigger
@@ -139,7 +387,11 @@
                     <Tooltip.Provider>
                         <Tooltip.Root>
                             <Tooltip.Trigger
-                                class="rounded-md px-3 py-3 text-sm font-bold tracking-wide shadow-sm duration-150 hover:bg-background/50"
+                                onclick={() => (currentTool = "move")}
+                                class="rounded-md px-3 py-3 text-sm font-bold tracking-wide shadow-sm duration-150 {currentTool ===
+                                'move'
+                                    ? 'bg-background text-green-500'
+                                    : 'hover:bg-background/50'}"
                                 ><Move3D class="h-4 w-4" /></Tooltip.Trigger
                             >
                             <Tooltip.Content>
@@ -155,7 +407,11 @@
                     <Tooltip.Provider>
                         <Tooltip.Root>
                             <Tooltip.Trigger
-                                class="rounded-md px-3 py-3 text-sm font-bold tracking-wide shadow-sm duration-150 hover:bg-background/50"
+                                onclick={() => (currentTool = "rotate")}
+                                class="rounded-md px-3 py-3 text-sm font-bold tracking-wide shadow-sm duration-150 {currentTool ===
+                                'rotate'
+                                    ? 'bg-background text-green-500'
+                                    : 'hover:bg-background/50'}"
                                 ><Rotate3D class="h-4 w-4" /></Tooltip.Trigger
                             >
                             <Tooltip.Content>
@@ -171,7 +427,11 @@
                     <Tooltip.Provider>
                         <Tooltip.Root>
                             <Tooltip.Trigger
-                                class="rounded-md px-3 py-3 text-sm font-bold tracking-wide shadow-sm duration-150 hover:bg-background/50"
+                                onclick={() => (currentTool = "scale")}
+                                class="rounded-md px-3 py-3 text-sm font-bold tracking-wide shadow-sm duration-150 {currentTool ===
+                                'scale'
+                                    ? 'bg-background text-green-500'
+                                    : 'hover:bg-background/50'}"
                                 ><Scale3D class="h-4 w-4" /></Tooltip.Trigger
                             >
                             <Tooltip.Content>
@@ -189,7 +449,33 @@
                     <Tooltip.Provider>
                         <Tooltip.Root>
                             <Tooltip.Trigger
-                                class="rounded-md bg-background px-3 py-3 text-sm font-bold tracking-wide text-green-500 shadow-sm duration-150"
+                                onclick={createPart}
+                                class="rounded-md px-3 py-3 text-sm font-bold tracking-wide text-green-400 shadow-sm duration-150 hover:bg-background/50 hover:text-green-300"
+                                ><Box class="h-4 w-4" /></Tooltip.Trigger
+                            >
+                            <Tooltip.Content>
+                                <p>
+                                    Spawn Cube <Kbd.Root class="ml-1 font-bold"
+                                        >B</Kbd.Root
+                                    >
+                                </p>
+                            </Tooltip.Content>
+                        </Tooltip.Root>
+                    </Tooltip.Provider>
+                </div>
+
+                <div class="flex items-center gap-1 rounded-lg bg-muted p-1">
+                    <Tooltip.Provider>
+                        <Tooltip.Root>
+                            <Tooltip.Trigger
+                                onclick={() => {
+                                    selectionMode = "part";
+                                    selectedFaces = [];
+                                }}
+                                class="rounded-md px-3 py-3 text-sm font-bold tracking-wide shadow-sm duration-150 {selectionMode ===
+                                'part'
+                                    ? 'bg-background text-green-500'
+                                    : 'hover:bg-background/50'}"
                                 ><Box class="h-4 w-4" /></Tooltip.Trigger
                             >
                             <Tooltip.Content>
@@ -201,13 +487,21 @@
                     <Tooltip.Provider>
                         <Tooltip.Root>
                             <Tooltip.Trigger
-                                class="rounded-md px-3 py-3 text-sm font-bold tracking-wide shadow-sm duration-150 hover:bg-background/50"
+                                onclick={() => (selectionMode = "face")}
+                                class="rounded-md px-3 py-3 text-sm font-bold tracking-wide shadow-sm duration-150 {selectionMode ===
+                                'face'
+                                    ? 'bg-background text-green-500'
+                                    : 'hover:bg-background/50'}"
                                 ><SquaresUnite
                                     class="h-4 w-4"
                                 /></Tooltip.Trigger
                             >
                             <Tooltip.Content>
-                                <p>Select Faces</p>
+                                <p>
+                                    Select Faces <Kbd.Root
+                                        class="ml-1 font-bold">Tab</Kbd.Root
+                                    >
+                                </p>
                             </Tooltip.Content>
                         </Tooltip.Root>
                     </Tooltip.Provider>
@@ -215,7 +509,11 @@
                     <Tooltip.Provider>
                         <Tooltip.Root>
                             <Tooltip.Trigger
-                                class="rounded-md px-3 py-3 text-sm font-bold tracking-wide shadow-sm duration-150 hover:bg-background/50"
+                                onclick={() => (selectionMode = "model")}
+                                class="rounded-md px-3 py-3 text-sm font-bold tracking-wide shadow-sm duration-150 {selectionMode ===
+                                'model'
+                                    ? 'bg-background text-green-500'
+                                    : 'hover:bg-background/50'}"
                                 ><Boxes class="h-4 w-4" /></Tooltip.Trigger
                             >
                             <Tooltip.Content>
@@ -335,22 +633,111 @@
 
     <Resizable.Handle />
 
-    <Resizable.Pane defaultSize={22} class="overflow-hidden border-l">
+    <Resizable.Pane defaultSize={22} class="h-full overflow-hidden border-l">
         <div class="h-full overflow-y-auto p-5">
             <h2 class="text-xl font-bold text-foreground">Properties</h2>
             <p class="mb-4 text-xs text-muted-foreground">Entity · Model</p>
 
-            <p class="mt-2 text-sm">Model Name</p>
-            <input
-                type="text"
-                value="New Model"
-                class="my-2 w-full rounded-md border-2 border-border/60 bg-background px-3 py-2 text-sm duration-150 outline-none focus:border-green-700"
-            />
+            {#if selectedPartIds.length > 0}
+                <p
+                    class="mb-2 rounded-md bg-muted/60 px-3 py-1.5 text-xs text-green-400"
+                >
+                    {selectedPartIds.length} part(s) selected{#if selectedFaces.length > 0}
+                        · {selectedFaces.length} face(s){/if}
+                </p>
+            {/if}
 
-            <button
-                class="group relative mt-2 flex gap-1.5 overflow-hidden rounded-md bg-gradient-to-b from-green-500 to-green-600 px-5 py-1.5 text-center text-sm font-bold text-white shadow-sm transition-[transform,background-color,box-shadow] duration-150 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:from-green-400 hover:to-green-500 hover:shadow-md active:scale-95"
-                >Save Model</button
-            >
+            {#if selectedPartIds.length === 0}
+                <p class="mt-2 text-sm">Model Name</p>
+                <input
+                    type="text"
+                    bind:value={modelData.name}
+                    class="my-2 w-full rounded-md border-2 border-border/60 bg-background px-3 py-2 text-sm duration-150 outline-none focus:border-green-700"
+                />
+
+                <button
+                    onclick={handleSave}
+                    class="group relative mt-2 flex gap-1.5 overflow-hidden rounded-md bg-gradient-to-b from-green-500 to-green-600 px-5 py-1.5 text-center text-sm font-bold text-white shadow-sm transition-[transform,background-color,box-shadow] duration-150 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:from-green-400 hover:to-green-500 hover:shadow-md active:scale-95"
+                    >{saved ? "Saved!" : "Save Model"}</button
+                >
+            {:else}
+                {#each selectedPartIds as partId}
+                    {#each getSelectedPartComponents() as { component, data }}
+                        <div class="mt-5 mb-2 flex items-center gap-2">
+                            <p
+                                class="font-bold tracking-widest text-muted-foreground uppercase"
+                            >
+                                {component.name}
+                            </p>
+                            <div class="h-px flex-1 bg-border/60"></div>
+                        </div>
+
+                        {#each Object.entries(component.data) as [key, entry]}
+                            <div class="flex flex-col gap-3">
+                                {#if entry.type === "vector3"}
+                                    <div>
+                                        <p class="mb-1 text-sm">{key}</p>
+                                        {#if key === "rotation"}
+                                            <RotationInput
+                                                components={data}
+                                                {key}
+                                            />
+                                        {:else}
+                                            <Vector3Input
+                                                components={data}
+                                                {key}
+                                            />
+                                        {/if}
+                                    </div>
+                                {:else if entry.type === "string"}
+                                    <div>
+                                        <p class="mb-1 text-sm">{key}</p>
+                                        <input
+                                            type="text"
+                                            bind:value={entry.value}
+                                            class="my-2 w-full rounded-md border-2 border-border/60 bg-background px-3 py-2 text-sm duration-150 outline-none focus:border-green-700"
+                                        />
+                                    </div>
+                                {:else if entry.type === "number"}
+                                    <div>
+                                        <p class="mb-1 text-sm">{key}</p>
+                                        <input
+                                            type="number"
+                                            bind:value={entry.value}
+                                            class="my-2 w-full rounded-md border-2 border-border/60 bg-background px-3 py-2 text-sm duration-150 outline-none focus:border-green-700"
+                                        />
+                                    </div>
+                                {:else if entry.type === "boolean"}
+                                    <div
+                                        class="flex items-center justify-between"
+                                    >
+                                        <p class="text-sm">{key}</p>
+                                        <Switch bind:checked={entry.value} />
+                                    </div>
+                                {:else if entry.type === "color"}
+                                    <div>
+                                        <p class="mb-1 text-sm">{key}</p>
+                                        <input
+                                            type="color"
+                                            bind:value={entry.value}
+                                            class="my-2 h-10 w-full rounded-md border-2 border-border/60 bg-background duration-150 outline-none focus:border-green-700"
+                                        />
+                                    </div>
+                                {:else}
+                                    <div>
+                                        <p class="mb-1 text-sm">{key}</p>
+                                        <input
+                                            type="text"
+                                            bind:value={entry.value}
+                                            class="my-2 w-full rounded-md border-2 border-border/60 bg-background px-3 py-2 text-sm duration-150 outline-none focus:border-green-700"
+                                        />
+                                    </div>
+                                {/if}
+                            </div>
+                        {/each}
+                    {/each}
+                {/each}
+            {/if}
         </div>
     </Resizable.Pane>
 </Resizable.PaneGroup>

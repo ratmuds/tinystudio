@@ -6,11 +6,123 @@
     import ModelWorkspace from "$lib/components/editor/workspaces/ModelWorkspace.svelte";
     import ScriptWorkspace from "$lib/components/editor/workspaces/ScriptWorkspace.svelte";
 
+    import { untrack } from "svelte";
     import type { MenuItem, StudioTab, WorkspaceKind } from "$lib/types/editor";
+    import {
+        GameData,
+        ModelData,
+        WorldData,
+    } from "$lib/stores/data";
 
+    // ─── Single source of truth ──────────────────────────────────────────
+    // ALL game data lives here. Workspaces receive references into this
+    // object and modify it directly. Because Svelte 5 $state() is deeply
+    // reactive, mutations to nested properties propagate everywhere.
+    let gameData = $state(new GameData());
+
+    // ─── Tabs ────────────────────────────────────────────────────────────
+    // Each tab references a piece of data by its ID (dataId).
+    // When a tab is switched to, we look up the data from gameData.
+    let tabs = $state<StudioTab[]>([]);
+    let activeTab = $state<string>("");
+
+    /** Find the data object for a given tab. */
+    function dataForTab(tab: StudioTab): ModelData | WorldData | undefined {
+        if (!tab.dataId) return undefined;
+        if (tab.kind === "model") return gameData.models.find((m) => m.id === tab.dataId);
+        if (tab.kind === "world") return gameData.worlds.find((w) => w.id === tab.dataId) as unknown as WorldData;
+        return undefined;
+    }
+
+    /** Get the currently-active workspace data (cast to the right type). */
+    function activeModelData(): ModelData | undefined {
+        const tab = tabs.find((t) => t.id === activeTab);
+        return tab?.kind === "model" ? dataForTab(tab) as ModelData | undefined : undefined;
+    }
+
+    function activeWorldData(): WorldData | undefined {
+        const tab = tabs.find((t) => t.id === activeTab);
+        return tab?.kind === "world" ? dataForTab(tab) as WorldData | undefined : undefined;
+    }
+
+    // ─── Tab management ─────────────────────────────────────────────────
+    function openModelTab(name: string, modelData: ModelData) {
+        // Reuse existing tab if this model is already open
+        const existing = tabs.find((t) => t.dataId === modelData.id && t.kind === "model");
+        if (existing) {
+            activeTab = existing.id;
+            return;
+        }
+        const tab: StudioTab = {
+            id: crypto.randomUUID(),
+            name,
+            kind: "model",
+            dirty: false,
+            dataId: modelData.id,
+        };
+        tabs.push(tab);
+        activeTab = tab.id;
+
+        console.log("Opened model tab:", tab, "Current tabs:", tabs);
+    }
+
+    function createNewModel(name?: string) {
+        const model = new ModelData(name ?? "Untitled Model");
+        gameData.models.push(model);
+        openModelTab(model.name, model);
+    }
+
+    function openWorldTab(name: string, worldData: WorldData) {
+        const existing = tabs.find((t) => t.dataId === worldData.id && t.kind === "world");
+        if (existing) {
+            activeTab = existing.id;
+            return;
+        }
+        const tab: StudioTab = {
+            id: crypto.randomUUID(),
+            name,
+            kind: "world",
+            dirty: false,
+            dataId: worldData.id,
+        };
+        tabs.push(tab);
+        activeTab = tab.id;
+    }
+
+    function createNewWorld(name?: string) {
+        const world = new WorldData();
+        world.name = name ?? "Untitled World";
+        gameData.worlds.push(world);
+        openWorldTab(world.name, world);
+    }
+
+    // Seed default tabs so there's something to work with
+    if (tabs.length === 0) {
+        createNewWorld("Lobby");
+        createNewModel("My Model");
+        // Model tab is created last → activeTab points to it → activeWorkspace = "model"
+    }
+
+    // ─── Save ────────────────────────────────────────────────────────────
+    let saved = $state(true);
+    let saving = $state(false);
+
+    function triggerSave() {
+        if (saving) return;
+        saving = true;
+        saved = false;
+        console.log("Saving gameData:", gameData);
+        setTimeout(() => {
+            saving = false;
+            saved = true;
+        }, 900);
+    }
+
+    // ─── Menu config ─────────────────────────────────────────────────────
     const menus: Record<string, MenuItem[]> = {
         File: [
             { label: "New World", shortcut: "Ctrl+N" },
+            { label: "New Model", shortcut: "Ctrl+M" },
             { label: "Open…", shortcut: "Ctrl+O" },
             { separator: true },
             { label: "Save", shortcut: "Ctrl+S" },
@@ -54,25 +166,48 @@
         ],
     };
 
-    let activeWorkspace = $state<WorkspaceKind>("world");
+    let activeWorkspace = $state<WorkspaceKind>("model");
 
-    let tabs = $state<StudioTab[]>([
-        { id: "t1", name: "Lobby", kind: "world", dirty: false },
-        { id: "t2", name: "Game", kind: "world", dirty: true },
-    ]);
-    let activeTab = $state("t1");
+    // ─── Sync activeWorkspace ↔ activeTab ─────────────────────────────────
+    // Each effect uses untrack() to read the "other" variable without
+    // creating a circular dependency. Without untrack, clicking a tab
+    // triggers Effect A → changes activeWorkspace → triggers Effect B
+    // → overwrites activeTab to the WRONG tab.
 
-    let saved = $state(true);
-    let saving = $state(false);
+    // Tab click → update workspace to match the tab's kind
+    $effect(() => {
+        const tab = tabs.find((t) => t.id === activeTab);
+        if (tab && tab.kind !== untrack(() => activeWorkspace)) {
+            activeWorkspace = tab.kind;
+        }
+    });
 
-    function triggerSave() {
-        if (saving) return;
-        saving = true;
-        saved = false;
-        setTimeout(() => {
-            saving = false;
-            saved = true;
-        }, 900);
+    // Menu workspace change → find or create a tab of that kind
+    $effect(() => {
+        const ws = activeWorkspace;
+        const currentTab = untrack(() => tabs.find((t) => t.id === activeTab));
+        if (currentTab && currentTab.kind === ws) return; // already on right tab
+
+        const tab = untrack(() => tabs.find((t) => t.kind === ws));
+        if (tab) {
+            activeTab = tab.id;
+        } else {
+            if (ws === "model") createNewModel();
+            else if (ws === "world") createNewWorld();
+        }
+    });
+
+    function switchWorkspace(kind: WorkspaceKind) {
+        activeWorkspace = kind;
+        // Find an existing tab of this kind, or create one
+        const existing = tabs.find((t) => t.kind === kind);
+        if (existing) {
+            activeTab = existing.id;
+        } else {
+            // Create a new tab of the right kind
+            if (kind === "model") createNewModel();
+            else if (kind === "world") createNewWorld();
+        }
     }
 </script>
 
@@ -90,9 +225,23 @@
     <TabBar bind:tabs bind:activeTab />
 
     {#if activeWorkspace === "world"}
-        <WorldWorkspace />
+        {@const worldData = activeWorldData()}
+        {#if worldData}
+            <WorldWorkspace {worldData} {gameData} />
+        {:else}
+            <div class="flex h-full items-center justify-center text-muted-foreground">
+                <p>No world selected. Open a world tab to start editing.</p>
+            </div>
+        {/if}
     {:else if activeWorkspace === "model"}
-        <ModelWorkspace />
+        {@const modelData = activeModelData()}
+        {#if modelData}
+            <ModelWorkspace {modelData} {gameData} />
+        {:else}
+            <div class="flex h-full items-center justify-center text-muted-foreground">
+                <p>No model selected. Open a model tab to start editing.</p>
+            </div>
+        {/if}
     {:else if activeWorkspace === "script"}
         <ScriptWorkspace />
     {/if}
