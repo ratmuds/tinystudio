@@ -1,9 +1,9 @@
 <script lang="ts">
     import * as InputGroup from "$lib/components/ui/input-group/index.js";
-    import * as ECS from "$lib/stores/ecs";
+    import * as ECS from "$lib/stores/ecs.svelte";
 
     let {
-        components,
+        components = $bindable([]),
         key = "position",
     }: { components: ECS.Component[]; key?: string } = $props();
     let valuesUnique = $state(false);

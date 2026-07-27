@@ -1,13 +1,13 @@
 type BaseEntityType = "part" | "model" | "light" | "camera" | "custom";
 
 class Entity {
-    id!: string;
-    name!: string;
-    baseEntity!: BaseEntityType; // The base entity type determines the default components and behavior of the entity
+    id: string = $state("");
+    name: string = $state("");
+    baseEntity: BaseEntityType = $state("part"); // The base entity type determines the default components and behavior of the entity
 
-    components: Component[] = [];
+    components: Component[] = $state([]);
 
-    children: Entity[] = [];
+    children: Entity[] = $state([]);
 }
 
 type ComponentDataEntry = {
@@ -25,25 +25,33 @@ type ComponentDataEntry = {
     value: any;
 
     tooltip?: string;
+    dirty: boolean;
 };
 
 class Component {
-    id!: string;
-    name!: string;
-    tooltip?: string;
+    id: string = $state("");
+    name: string = $state("");
+    tooltip?: string = $state();
 
-    data: Record<string, ComponentDataEntry> = {};
+    data: Record<string, ComponentDataEntry> = $state({});
 }
 
 class System {
-    id!: string;
-    name!: string;
-    tooltip?: string;
+    id: string = $state("");
+    name: string = $state("");
+    tooltip?: string = $state();
 
-    relatedComponents: string[] = [];
+    relatedComponents: string[] = $state([]);
+    systemData: any = $state({});
 
-    // The update function is called every frame with the delta time and the list of entities in the world.
-    update(deltaTime: number, entities: Entity[]): void {}
+    // Called once when the runtime starts. Use this to initialize resources.
+    setup(_entities: Entity[]): void {}
+
+    // Called every frame with the delta time and the list of entities in the world.
+    update(_deltaTime: number, _entities: Entity[]): void {}
+
+    // Called once when the runtime stops. Use this to clean up resources.
+    cleanup(): void {}
 }
 
 // Component Factories //
@@ -58,6 +66,7 @@ function makeEntry(
         defaultValue: structuredClone(defaultValue),
         value: structuredClone(defaultValue),
         tooltip,
+        dirty: false,
     };
 }
 
@@ -106,26 +115,20 @@ function createPhysicsComponent(): Component {
     c.tooltip =
         "Defines how this entity interacts with the physics simulation.";
     c.data = {
-        collisionShape: makeEntry(
-            "string",
-            "box",
-            "Shape used for collision: box, sphere, or convexHull",
+        enabled: makeEntry(
+            "boolean",
+            true,
+            "Whether the physics simulation is enabled for this entity",
         ),
-        mass: makeEntry("number", 1, "Mass in kg. 0 = static/immovable"),
-        friction: makeEntry(
-            "number",
-            0.5,
-            "Surface friction (0 = ice, 1 = rubber)",
-        ),
-        restitution: makeEntry(
-            "number",
-            0.3,
-            "Bounciness (0 = no bounce, 1 = perfect bounce)",
-        ),
-        isKinematic: makeEntry(
+        anchored: makeEntry(
             "boolean",
             false,
-            "Kinematic objects move by script, not forces",
+            "Whether the entity is anchored in place and does not move",
+        ),
+        customCollider: makeEntry(
+            "model",
+            "",
+            "Optional custom collider model ID",
         ),
     };
     return c;
@@ -145,6 +148,16 @@ function createModelRefComponent(modelId: string): Component {
         ),
     };
     return c;
+}
+
+function clearDirtyFlags(entities: Entity[]): void {
+    for (const entity of entities) {
+        for (const component of entity.components) {
+            for (const key in component.data) {
+                component.data[key].dirty = false;
+            }
+        }
+    }
 }
 
 // ─── Entity Factories ───────────────────────────────────────────────────
@@ -170,6 +183,8 @@ export {
     Component,
     System,
     type ComponentDataEntry,
+    // utilities
+    clearDirtyFlags,
     // factories
     createTransformComponent,
     createMeshComponent,

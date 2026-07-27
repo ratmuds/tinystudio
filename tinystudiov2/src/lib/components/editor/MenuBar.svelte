@@ -9,7 +9,7 @@
         Newspaper,
         Globe,
         Box,
-        Code2,
+        Code,
     } from "@lucide/svelte";
     import { fly } from "svelte/transition";
     import { quintOut } from "svelte/easing";
@@ -36,7 +36,8 @@
     const workspaces = [
         { id: "world", label: "World", icon: Globe },
         { id: "model", label: "Model", icon: Box },
-        { id: "script", label: "Script", icon: Code2 },
+        { id: "script", label: "Script", icon: Code },
+        { id: "test", label: "Test", icon: Play },
     ] as const;
 
     function toggleMenu(name: string) {

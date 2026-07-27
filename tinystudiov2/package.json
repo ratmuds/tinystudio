@@ -36,6 +36,7 @@
     "vite": "^8.0.16"
   },
   "dependencies": {
-    "@lucide/svelte": "^1.17.0"
+    "@lucide/svelte": "^1.17.0",
+    "jolt-physics": "^1.1.0"
   }
 }

@@ -37,10 +37,15 @@
         CirclePlus,
     } from "@lucide/svelte";
 
-    import { ModelData, ModelWorkspaceData, GameData } from "$lib/stores/data";
-    import { createPartEntity, type Entity } from "$lib/stores/ecs";
-    import * as ECS from "$lib/stores/ecs";
+    import {
+        ModelData,
+        ModelWorkspaceData,
+        GameData,
+    } from "$lib/stores/data.svelte";
+    import { createPartEntity, type Entity } from "$lib/stores/ecs.svelte";
+    import * as ECS from "$lib/stores/ecs.svelte";
     import { onMount } from "svelte";
+    import { generateObjectPreview } from "$lib/threeThumbnailGen";
 
     let {
         modelData,
@@ -110,10 +115,102 @@
         };
         mesh.position.set(pos.x, pos.y, pos.z);
         mesh.userData.entityId = entity.id;
-        scene.add(mesh);
         mesh.userData.partId = entity.id;
+        mesh.userData.geometryType = geomType;
+        mesh.userData.size = { ...size };
+        scene.add(mesh);
         meshByEntityId.set(entity.id, mesh);
         return mesh;
+    }
+
+    /** Rebuild a mesh's geometry from its Mesh component data. */
+    function rebuildMeshGeometry(mesh: THREE.Mesh, meshComp: ECS.Component) {
+        const geomType = meshComp.data.geometryType.value as string;
+        const size = (meshComp.data.size?.value ?? { x: 1, y: 1, z: 1 }) as {
+            x: number;
+            y: number;
+            z: number;
+        };
+
+        mesh.geometry.dispose();
+
+        switch (geomType) {
+            case "sphere":
+                mesh.geometry = new THREE.SphereGeometry(size.x / 2);
+                break;
+            case "cylinder":
+                mesh.geometry = new THREE.CylinderGeometry(
+                    size.x / 2,
+                    size.x / 2,
+                    size.y,
+                );
+                break;
+            default:
+                mesh.geometry = new THREE.BoxGeometry(size.x, size.y, size.z);
+        }
+
+        mesh.userData.geometryType = geomType;
+        mesh.userData.size = { ...size };
+    }
+
+    /** Update an existing Three.js mesh from its ECS entity data. */
+    function syncEntityToMesh(entity: Entity, mesh: THREE.Mesh) {
+        const transformComp = entity.components.find(
+            (c) => c.name === "Transform",
+        );
+        const meshComp = entity.components.find((c) => c.name === "Mesh");
+
+        if (transformComp) {
+            const pos = transformComp.data.position.value as {
+                x: number;
+                y: number;
+                z: number;
+            };
+            const rot = transformComp.data.rotation.value as {
+                x: number;
+                y: number;
+                z: number;
+            };
+            const scale = transformComp.data.scale.value as {
+                x: number;
+                y: number;
+                z: number;
+            };
+
+            mesh.position.set(pos.x, pos.y, pos.z);
+            mesh.rotation.set(rot.x, rot.y, rot.z);
+            mesh.scale.set(scale.x, scale.y, scale.z);
+        }
+
+        if (meshComp) {
+            const geomType = meshComp.data.geometryType.value as string;
+            const size = (meshComp.data.size?.value ?? {
+                x: 1,
+                y: 1,
+                z: 1,
+            }) as {
+                x: number;
+                y: number;
+                z: number;
+            };
+            const color = meshComp.data.color.value as number;
+
+            const geomChanged =
+                mesh.userData.geometryType !== geomType ||
+                !mesh.userData.size ||
+                mesh.userData.size.x !== size.x ||
+                mesh.userData.size.y !== size.y ||
+                mesh.userData.size.z !== size.z;
+
+            if (geomChanged) {
+                rebuildMeshGeometry(mesh, meshComp);
+            }
+
+            const material = mesh.material as THREE.MeshStandardMaterial;
+            if (material?.color) {
+                material.color.setHex(color);
+            }
+        }
     }
 
     /** Create a Part entity in the ECS and spawn its 3D mesh. */
@@ -147,11 +244,17 @@
         console.log("Created part entity:", entity);
     }
 
-    function handleSave() {
+    async function handleSave() {
         // TODO: persist to backend / localStorage
         console.log("Saving model:", modelData);
         saved = true;
         setTimeout(() => (saved = false), 2000);
+
+        modelData.thumbnail = "";
+        modelData.thumbnail = await generateObjectPreview(
+            modelData.entities,
+            256,
+        );
     }
 
     function handleEntitySelect(entityType: string) {
@@ -213,6 +316,7 @@
     // TransformControls are created by the Renderer component.
     // We bind to them so we can listen for object changes.
     let rendererTransformControls = $state<TransformControls | null>(null);
+    let isTransformDragging = $state(false);
 
     // Selection state (shared with Renderer)
     let selectionMode = $state<"part" | "face" | "model">("part");
@@ -256,11 +360,87 @@
                     y: +selectedObject.position.y.toFixed(3),
                     z: +selectedObject.position.z.toFixed(3),
                 };
+
+                const rotation = selectedObject.rotation;
+                transformComp.data.rotation.value = {
+                    x: +rotation.x.toFixed(3),
+                    y: +rotation.y.toFixed(3),
+                    z: +rotation.z.toFixed(3),
+                };
+
+                const scale = selectedObject.scale;
+                transformComp.data.scale.value = {
+                    x: +scale.x.toFixed(3),
+                    y: +scale.y.toFixed(3),
+                    z: +scale.z.toFixed(3),
+                };
             }
+
+            // Trigger svelte update
+            selectedPartIds = [...selectedPartIds];
         };
 
         tc.addEventListener("objectChange", onObjectChange);
         return () => tc.removeEventListener("objectChange", onObjectChange);
+    });
+
+    // Track when the user is dragging with TransformControls so we don't
+    // fight the gizmo by overwriting the mesh transform from ECS every frame.
+    $effect(() => {
+        const tc = rendererTransformControls;
+        if (!tc) return;
+
+        const onMouseDown = () => (isTransformDragging = true);
+        const onMouseUp = () => (isTransformDragging = false);
+
+        tc.addEventListener("mouseDown", onMouseDown);
+        tc.addEventListener("mouseUp", onMouseUp);
+        return () => {
+            tc.removeEventListener("mouseDown", onMouseDown);
+            tc.removeEventListener("mouseUp", onMouseUp);
+        };
+    });
+
+    // Sync ECS data → Three.js meshes (position, rotation, scale, size, color).
+    // This makes sidebar Vector3/Rotation inputs and other ECS edits update the
+    // rendered model in real time.
+    $effect(() => {
+        const entities = modelData.entities;
+        const seenIds = new Set<string>();
+
+        const attachedObject = rendererTransformControls?.object;
+        const attachedEntityId =
+            isTransformDragging && attachedObject
+                ? ((attachedObject as THREE.Mesh).userData.entityId as string)
+                : undefined;
+
+        for (const entity of entities) {
+            seenIds.add(entity.id);
+
+            let mesh = meshByEntityId.get(entity.id);
+            if (!mesh) {
+                mesh = createMeshForEntity(entity) ?? undefined;
+            }
+
+            if (mesh && entity.id !== attachedEntityId) {
+                syncEntityToMesh(entity, mesh);
+            }
+        }
+
+        // Remove meshes for entities that no longer exist
+        for (const [id, mesh] of meshByEntityId) {
+            if (!seenIds.has(id)) {
+                scene.remove(mesh);
+                mesh.geometry.dispose();
+                const mat = mesh.material;
+                if (Array.isArray(mat)) {
+                    for (const m of mat) m.dispose();
+                } else if (mat) {
+                    mat.dispose();
+                }
+                meshByEntityId.delete(id);
+            }
+        }
     });
 
     function getSelectedPartComponents() {
@@ -333,9 +513,46 @@
 
 <Resizable.PaneGroup direction="horizontal" class="min-h-0 flex-1">
     <Resizable.Pane defaultSize={20} class="overflow-hidden border-r">
-        <div class="flex h-full flex-col items-center justify-center p-8">
-            <p class="text-sm text-muted-foreground">Model workspace</p>
-            <p class="mt-1 text-xs text-muted-foreground/60">Coming soon</p>
+        <!-- Model entities section -->
+        <div
+            class="flex shrink-0 items-center justify-between border-b border-border/60 px-4 py-3"
+        >
+            <h2
+                class="text-xs font-bold tracking-widest text-foreground uppercase"
+            >
+                Model Objects
+            </h2>
+        </div>
+
+        <div class="min-h-0 flex-1 overflow-auto px-2 py-1">
+            {#each modelData.entities as entity (entity.id)}
+                <div
+                    class="group mx-1 flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-sm duration-100 {selectedPartIds.includes(
+                        entity.id,
+                    )
+                        ? 'bg-green-500/10 text-green-500'
+                        : 'text-foreground hover:bg-muted/60'}"
+                    onclick={() => selectedPartIds.push(entity.id)}
+                >
+                    <Boxes class="h-3.5 w-3.5 shrink-0 text-green-500" />
+                    <span class="flex-1 truncate">{entity.name}</span>
+                    <button
+                        class="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 duration-100 group-hover:opacity-100 hover:bg-destructive/15 hover:text-destructive"
+                        onclick={(e) => {
+                            e.stopPropagation();
+                        }}
+                        aria-label="Delete entity"
+                    >
+                        <Trash2 class="h-3 w-3" />
+                    </button>
+                </div>
+            {/each}
+
+            {#if modelData.entities.length === 0}
+                <p class="px-3 py-4 text-center text-xs text-muted-foreground">
+                    No objects in world yet. Spawn a model below.
+                </p>
+            {/if}
         </div>
     </Resizable.Pane>
 
@@ -600,32 +817,38 @@
                 <div
                     class="flex-1 space-y-1.5 overflow-auto p-4 leading-relaxed text-zinc-400"
                 >
-                    <div
-                        class="w-42 overflow-clip rounded-xl border bg-background/50"
-                    >
-                        <img
-                            style="background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.04) 0 10px, transparent 10px 20px);"
-                            class="h-28 w-full object-cover"
-                            alt=" "
-                        />
+                    {#each gameData.models as model}
+                        <div
+                            class="w-42 overflow-clip rounded-xl border bg-background/50 {model.id ===
+                            modelData.id
+                                ? 'border-2 border-green-700'
+                                : ''}"
+                        >
+                            <img
+                                style="background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.04) 0 10px, transparent 10px 20px);"
+                                class="h-28 w-full object-cover"
+                                alt=" "
+                                src={model.thumbnail}
+                            />
 
-                        <div class="mt-1 p-2">
-                            <h3 class="text-lg leading-tight text-white">
-                                Stud
-                            </h3>
-                            <p
-                                class="flex items-center gap-1.5 rounded-md text-sm text-muted-foreground transition-all duration-150 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:bg-muted/60 active:scale-95"
-                            >
-                                <Box class="h-3 w-3" /> Model
-                            </p>
-                            <button
-                                class="group relative mt-2 flex w-full items-center gap-1.5 overflow-hidden rounded-md bg-gradient-to-b from-green-500 to-green-600 px-5 py-1.5 text-center text-sm font-bold text-white shadow-sm transition-all duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:from-green-400 hover:to-green-500 hover:shadow-md active:scale-95"
-                                ><Plus
-                                    class="h-4 w-4 fill-white transition-transform group-hover:translate-x-0.5"
-                                /> Spawn</button
-                            >
+                            <div class="mt-1 p-2">
+                                <h3 class="text-lg leading-tight text-white">
+                                    {model.name}
+                                </h3>
+                                <p
+                                    class="flex items-center gap-1.5 rounded-md text-sm text-muted-foreground transition-all duration-150 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:bg-muted/60 active:scale-95"
+                                >
+                                    <Box class="h-3 w-3" /> Model
+                                </p>
+                                <button
+                                    class="group relative mt-2 flex w-full items-center gap-1.5 overflow-hidden rounded-md bg-gradient-to-b from-green-500 to-green-600 px-5 py-1.5 text-center text-sm font-bold text-white shadow-sm transition-all duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:from-green-400 hover:to-green-500 hover:shadow-md active:scale-95"
+                                    ><Plus
+                                        class="h-4 w-4 fill-white transition-transform group-hover:translate-x-0.5"
+                                    /> Spawn</button
+                                >
+                            </div>
                         </div>
-                    </div>
+                    {/each}
                 </div>
             </div>
         </div>

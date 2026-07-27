@@ -2,13 +2,13 @@
     import * as InputGroup from "$lib/components/ui/input-group/index.js";
     import { Label } from "$lib/components/ui/label/index.js";
     import { Switch } from "$lib/components/ui/switch/index.js";
-    import * as ECS from "$lib/stores/ecs";
+    import * as ECS from "$lib/stores/ecs.svelte";
 
     import { Move3D, Copy } from "@lucide/svelte";
 
     let {
         eulerMode = $bindable(true),
-        components = [],
+        components = $bindable([]),
         key = "rotation",
     }: {
         eulerMode?: boolean;

@@ -155,6 +155,9 @@
     import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
     import { OutlinePass } from "three/addons/postprocessing/OutlinePass.js";
     import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+    import { LineSegments2 } from "three/addons/lines/LineSegments2.js";
+    import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js";
+    import { LineMaterial } from "three/addons/lines/LineMaterial.js";
 
     const RES_W = 320;
     const RES_H = 240;
@@ -218,8 +221,10 @@
     let renderer: THREE.WebGLRenderer;
     let outlinePass: OutlinePass | null = null;
     let hoverOutlinePass: OutlinePass;
-    let faceHighlight: THREE.LineSegments | null = null;
-    let selectedFaceHighlights: THREE.LineSegments[] = [];
+    let faceHighlight: LineSegments2 | null = null;
+    let faceHighlightMaterial: LineMaterial | null = null;
+    let selectedFaceHighlights: LineSegments2[] = [];
+    let selectedFaceHighlightMaterials: LineMaterial[] = [];
     let mousePos = new THREE.Vector2();
 
     // Effect: Update outline pass when selection changes
@@ -267,9 +272,13 @@
             h.parent?.remove(h);
             h.geometry.dispose();
         }
+        for (const m of selectedFaceHighlightMaterials) {
+            m.dispose();
+        }
 
         // Create new highlights
-        const newHighlights: THREE.LineSegments[] = [];
+        const newHighlights: LineSegments2[] = [];
+        const newMaterials: LineMaterial[] = [];
         for (const face of faces) {
             if (!face.mesh?.geometry) continue;
             const faceGeo = getFaceEdgesGeometry(
@@ -277,18 +286,26 @@
                 face.faceIndex,
             );
             if (!faceGeo) continue;
-            const edgesGeo = new THREE.EdgesGeometry(faceGeo, 0.2);
-            const highlight = new THREE.LineSegments(
-                edgesGeo,
-                new THREE.LineBasicMaterial({ color: 0x44ff44 }),
-            );
-            // Add as child of mesh (geometry is in local space)
-            face.mesh.add(highlight);
+            const edgesGeo = new THREE.EdgesGeometry(faceGeo, 1);
+            const lineGeo = new LineSegmentsGeometry();
+            lineGeo.fromEdgesGeometry(edgesGeo);
+            edgesGeo.dispose();
+            const mat = new LineMaterial({ color: 0x44ff44, linewidth: 3 });
+            const highlight = new LineSegments2(lineGeo, mat);
+            highlight.computeLineDistances();
+            // Add to scene with world transform (LineSegments2 doesn't work well as child)
+            face.mesh.getWorldPosition(highlight.position);
+            face.mesh.getWorldQuaternion(highlight.quaternion);
+            face.mesh.getWorldScale(highlight.scale);
+            highlight.userData.mesh = face.mesh;
+            scene.add(highlight);
             newHighlights.push(highlight);
+            newMaterials.push(mat);
         }
 
         // Update tracking
         selectedFaceHighlights = newHighlights;
+        selectedFaceHighlightMaterials = newMaterials;
 
         // Cleanup on destroy only
         return () => {
@@ -296,6 +313,10 @@
                 h.parent?.remove(h);
                 h.geometry.dispose();
             }
+            for (const m of selectedFaceHighlightMaterials) {
+                m.dispose();
+            }
+            selectedFaceHighlightMaterials = [];
         };
     });
 
@@ -413,6 +434,10 @@
             composer.setSize(w, h);
             selPass.setSize(w, h);
             hoverOutlinePass.setSize(w, h);
+            // Update LineMaterial resolution for thick lines
+            const res = new THREE.Vector2(w, h);
+            if (faceHighlightMaterial) faceHighlightMaterial.resolution = res;
+            for (const m of selectedFaceHighlightMaterials) m.resolution = res;
         };
 
         const ro = new ResizeObserver(resize);
@@ -428,6 +453,15 @@
         // ANIMATION LOOP - hide transform controls during composer render to avoid outline
         const animate = () => {
             requestAnimationFrame(animate);
+            // Sync selected face highlights with their source meshes
+            for (const highlight of selectedFaceHighlights) {
+                const mesh = highlight.userData.mesh as THREE.Mesh | undefined;
+                if (mesh) {
+                    mesh.getWorldPosition(highlight.position);
+                    mesh.getWorldQuaternion(highlight.quaternion);
+                    mesh.getWorldScale(highlight.scale);
+                }
+            }
             composer.render();
             // Render transform controls separately without post-processing
             renderer.autoClear = false;
@@ -540,26 +574,45 @@
                             new THREE.Float32BufferAttribute(faceVerts, 3),
                         );
                         const edgesGeo = new THREE.EdgesGeometry(faceGeo, 0.1);
-                        if (faceHighlight) scene.remove(faceHighlight);
-                        faceHighlight = new THREE.LineSegments(
-                            edgesGeo,
-                            new THREE.LineBasicMaterial({ color: 0xffff00 }),
-                        );
+                        if (faceHighlight) {
+                            scene.remove(faceHighlight);
+                            faceHighlight.geometry.dispose();
+                            faceHighlightMaterial?.dispose();
+                        }
+                        const lineGeo = new LineSegmentsGeometry();
+                        lineGeo.fromEdgesGeometry(edgesGeo);
+                        edgesGeo.dispose();
+                        const mat = new LineMaterial({
+                            color: 0xffff00,
+                            linewidth: 3,
+                        });
+                        faceHighlightMaterial = mat;
+                        faceHighlight = new LineSegments2(lineGeo, mat);
+                        faceHighlight.computeLineDistances();
                         mesh.getWorldPosition(faceHighlight.position);
                         mesh.getWorldQuaternion(faceHighlight.quaternion);
                         mesh.getWorldScale(faceHighlight.scale);
                         scene.add(faceHighlight);
                     } else if (faceHighlight) {
                         scene.remove(faceHighlight);
+                        faceHighlight.geometry.dispose();
+                        faceHighlightMaterial?.dispose();
                         faceHighlight = null;
+                        faceHighlightMaterial = null;
                     }
                 } else if (faceHighlight) {
                     scene.remove(faceHighlight);
+                    faceHighlight.geometry.dispose();
+                    faceHighlightMaterial?.dispose();
                     faceHighlight = null;
+                    faceHighlightMaterial = null;
                 }
             } else if (faceHighlight) {
                 scene.remove(faceHighlight);
+                faceHighlight.geometry.dispose();
+                faceHighlightMaterial?.dispose();
                 faceHighlight = null;
+                faceHighlightMaterial = null;
             }
         }, 100);
 
@@ -699,13 +752,20 @@
             );
             if (faceHighlight) {
                 scene.remove(faceHighlight);
+                faceHighlight.geometry.dispose();
+                faceHighlightMaterial?.dispose();
                 faceHighlight = null;
+                faceHighlightMaterial = null;
             }
             for (const h of selectedFaceHighlights) {
                 h.parent?.remove(h);
                 h.geometry.dispose();
             }
+            for (const m of selectedFaceHighlightMaterials) {
+                m.dispose();
+            }
             selectedFaceHighlights = [];
+            selectedFaceHighlightMaterials = [];
         };
     });
 </script>

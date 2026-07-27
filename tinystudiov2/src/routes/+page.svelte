@@ -5,20 +5,28 @@
     import WorldWorkspace from "$lib/components/editor/workspaces/WorldWorkspace.svelte";
     import ModelWorkspace from "$lib/components/editor/workspaces/ModelWorkspace.svelte";
     import ScriptWorkspace from "$lib/components/editor/workspaces/ScriptWorkspace.svelte";
+    import RuntimeWorkspace from "$lib/components/editor/workspaces/Runtime.svelte";
 
     import { untrack } from "svelte";
     import type { MenuItem, StudioTab, WorkspaceKind } from "$lib/types/editor";
     import {
         GameData,
         ModelData,
+        RuntimeData,
         WorldData,
-    } from "$lib/stores/data";
+    } from "$lib/stores/data.svelte";
 
     // ─── Single source of truth ──────────────────────────────────────────
     // ALL game data lives here. Workspaces receive references into this
     // object and modify it directly. Because Svelte 5 $state() is deeply
     // reactive, mutations to nested properties propagate everywhere.
     let gameData = $state(new GameData());
+    let runtimeData = $state(new RuntimeData());
+
+    // Keep runtimeData.gameData in sync
+    $effect(() => {
+        runtimeData.gameData = gameData;
+    });
 
     // ─── Tabs ────────────────────────────────────────────────────────────
     // Each tab references a piece of data by its ID (dataId).
@@ -29,26 +37,36 @@
     /** Find the data object for a given tab. */
     function dataForTab(tab: StudioTab): ModelData | WorldData | undefined {
         if (!tab.dataId) return undefined;
-        if (tab.kind === "model") return gameData.models.find((m) => m.id === tab.dataId);
-        if (tab.kind === "world") return gameData.worlds.find((w) => w.id === tab.dataId) as unknown as WorldData;
+        if (tab.kind === "model")
+            return gameData.models.find((m) => m.id === tab.dataId);
+        if (tab.kind === "world")
+            return gameData.worlds.find(
+                (w) => w.id === tab.dataId,
+            ) as unknown as WorldData;
         return undefined;
     }
 
     /** Get the currently-active workspace data (cast to the right type). */
     function activeModelData(): ModelData | undefined {
         const tab = tabs.find((t) => t.id === activeTab);
-        return tab?.kind === "model" ? dataForTab(tab) as ModelData | undefined : undefined;
+        return tab?.kind === "model"
+            ? (dataForTab(tab) as ModelData | undefined)
+            : undefined;
     }
 
     function activeWorldData(): WorldData | undefined {
         const tab = tabs.find((t) => t.id === activeTab);
-        return tab?.kind === "world" ? dataForTab(tab) as WorldData | undefined : undefined;
+        return tab?.kind === "world"
+            ? (dataForTab(tab) as WorldData | undefined)
+            : undefined;
     }
 
     // ─── Tab management ─────────────────────────────────────────────────
     function openModelTab(name: string, modelData: ModelData) {
         // Reuse existing tab if this model is already open
-        const existing = tabs.find((t) => t.dataId === modelData.id && t.kind === "model");
+        const existing = tabs.find(
+            (t) => t.dataId === modelData.id && t.kind === "model",
+        );
         if (existing) {
             activeTab = existing.id;
             return;
@@ -73,7 +91,9 @@
     }
 
     function openWorldTab(name: string, worldData: WorldData) {
-        const existing = tabs.find((t) => t.dataId === worldData.id && t.kind === "world");
+        const existing = tabs.find(
+            (t) => t.dataId === worldData.id && t.kind === "world",
+        );
         if (existing) {
             activeTab = existing.id;
             return;
@@ -89,6 +109,17 @@
         activeTab = tab.id;
     }
 
+    function openTestTab() {
+        const tab: StudioTab = {
+            id: crypto.randomUUID(),
+            name: "Test Tab",
+            kind: "test",
+            dirty: false,
+            dataId: "",
+        };
+        tabs.push(tab);
+    }
+
     function createNewWorld(name?: string) {
         const world = new WorldData();
         world.name = name ?? "Untitled World";
@@ -97,10 +128,10 @@
     }
 
     // Seed default tabs so there's something to work with
-    if (tabs.length === 0) {
+    if (untrack(() => tabs.length === 0)) {
         createNewWorld("Lobby");
         createNewModel("My Model");
-        // Model tab is created last → activeTab points to it → activeWorkspace = "model"
+        openTestTab();
     }
 
     // ─── Save ────────────────────────────────────────────────────────────
@@ -229,7 +260,9 @@
         {#if worldData}
             <WorldWorkspace {worldData} {gameData} />
         {:else}
-            <div class="flex h-full items-center justify-center text-muted-foreground">
+            <div
+                class="flex h-full items-center justify-center text-muted-foreground"
+            >
                 <p>No world selected. Open a world tab to start editing.</p>
             </div>
         {/if}
@@ -238,11 +271,15 @@
         {#if modelData}
             <ModelWorkspace {modelData} {gameData} />
         {:else}
-            <div class="flex h-full items-center justify-center text-muted-foreground">
+            <div
+                class="flex h-full items-center justify-center text-muted-foreground"
+            >
                 <p>No model selected. Open a model tab to start editing.</p>
             </div>
         {/if}
     {:else if activeWorkspace === "script"}
         <ScriptWorkspace />
+    {:else if activeWorkspace === "test"}
+        <RuntimeWorkspace {runtimeData} />
     {/if}
 </div>

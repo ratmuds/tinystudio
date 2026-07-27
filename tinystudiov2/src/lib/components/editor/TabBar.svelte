@@ -7,9 +7,11 @@
     let {
         tabs = $bindable(),
         activeTab = $bindable(),
+        createTab,
     }: {
         tabs: StudioTab[];
         activeTab: string;
+        createTab: () => void;
     } = $props();
 
     function kindIcon(kind: StudioTab["kind"]) {
@@ -102,6 +104,7 @@
             <Tooltip.Trigger
                 class="flex shrink-0 cursor-pointer items-center justify-center rounded-md p-1.5 text-muted-foreground transition-all duration-150 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:bg-muted/60 hover:text-foreground active:scale-90"
                 aria-label="New tab"
+                onclick={createTab}
             >
                 <Plus class="h-4 w-4" />
             </Tooltip.Trigger>
