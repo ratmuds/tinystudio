@@ -290,6 +290,12 @@
         if (e.key === "e") currentTool = "rotate";
         if (e.key === "r") currentTool = "scale";
 
+        // Constraint placement
+        if (e.key === "c" && !e.metaKey && !e.ctrlKey) {
+            e.preventDefault();
+            placingConstraint = !placingConstraint;
+        }
+
         // Mode toggle
         if (e.key === "Tab") {
             e.preventDefault();
@@ -325,6 +331,12 @@
     let selectedFaces = $state<
         { entityId: string; faceIndex: number; mesh: THREE.Mesh }[]
     >([]);
+    let placingConstraint = $state(false);
+
+    function onConstraintCreated(entity: Entity) {
+        modelData.entities.push(entity);
+        console.log("Constraint created:", entity);
+    }
 
     onMount(() => {
         // Create an initial Part entity if none exist
@@ -574,6 +586,8 @@
                     bind:currentTool
                     bind:selectedPartIds
                     bind:selectedFaces
+                    bind:placingConstraint
+                    {onConstraintCreated}
                 />
             </div>
 
@@ -744,7 +758,10 @@
                     <Tooltip.Provider>
                         <Tooltip.Root>
                             <Tooltip.Trigger
-                                class="rounded-md px-3 py-3 text-sm font-bold tracking-wide shadow-sm duration-150 hover:bg-background/50 hover:text-green-500"
+                                onclick={() => (placingConstraint = !placingConstraint)}
+                                class="rounded-md px-3 py-3 text-sm font-bold tracking-wide shadow-sm duration-150 {placingConstraint
+                                    ? 'bg-background text-green-500'
+                                    : 'hover:bg-background/50 hover:text-green-500'}"
                                 ><Link class="h-4 w-4" /></Tooltip.Trigger
                             >
                             <Tooltip.Content>
@@ -815,11 +832,11 @@
                     </button>
                 </div>
                 <div
-                    class="flex-1 space-y-1.5 overflow-auto p-4 leading-relaxed text-zinc-400"
+                    class="grid flex-1 grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-1.5 overflow-auto p-4 leading-relaxed text-zinc-400"
                 >
                     {#each gameData.models as model}
                         <div
-                            class="w-42 overflow-clip rounded-xl border bg-background/50 {model.id ===
+                            class="overflow-clip rounded-xl border bg-background/50 {model.id ===
                             modelData.id
                                 ? 'border-2 border-green-700'
                                 : ''}"

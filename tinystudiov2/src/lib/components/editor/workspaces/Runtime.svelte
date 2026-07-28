@@ -66,13 +66,26 @@
     }
 
     // Deep clone entity
-    function cloneEntity(entity: Entity): Entity {
+    /**
+     * Clone an entity. If `instanceId` is provided, generates deterministic
+     * composite IDs (`instanceId:templateId`) so that:
+     *  - Duplicate model instances get unique part IDs
+     *  - Re-instantiating the same model produces the same IDs (stable references)
+     * Without `instanceId`, fresh random UUIDs are assigned.
+     */
+    function cloneEntity(entity: Entity, instanceId?: string): Entity {
+        const newId = instanceId
+            ? `${instanceId}:${entity.id}`
+            : crypto.randomUUID();
+
         return {
-            id: entity.id,
+            id: newId,
             name: entity.name,
             baseEntity: entity.baseEntity,
             components: entity.components.map((c) => ({
-                id: c.id,
+                id: instanceId
+                    ? `${instanceId}:${c.id}`
+                    : crypto.randomUUID(),
                 name: c.name,
                 tooltip: c.tooltip,
                 data: structuredClone($state.snapshot(c.data)),
@@ -103,9 +116,34 @@
                 if (!model) continue;
 
                 const mWorld = matrixFromTransform(worldT);
-                for (const partTemplate of model.entities) {
-                    const part = cloneEntity(partTemplate);
-                    const partT = part.components.find(
+                const instanceId = worldEntity.id;
+
+                for (const templateEntity of model.entities) {
+                    const cloned = cloneEntity(templateEntity, instanceId);
+
+                    if (cloned.baseEntity === "constraint") {
+                        // Constraints don't have transforms — just remap
+                        // entity references to the cloned part IDs
+                        const constraintComp = cloned.components.find(
+                            (c) => c.name === "Constraint",
+                        );
+                        if (constraintComp) {
+                            const refA = constraintComp.data.entityA
+                                .value as string;
+                            const refB = constraintComp.data.entityB
+                                .value as string;
+                            if (refA)
+                                constraintComp.data.entityA.value =
+                                    `${instanceId}:${refA}`;
+                            if (refB)
+                                constraintComp.data.entityB.value =
+                                    `${instanceId}:${refB}`;
+                        }
+                        out.push(cloned);
+                        continue;
+                    }
+
+                    const partT = cloned.components.find(
                         (c) => c.name === "Transform",
                     );
                     if (!partT) continue;
@@ -114,7 +152,7 @@
                     const mComposed = mWorld.clone().multiply(mPart);
                     applyMatrixToTransform(partT, mComposed);
 
-                    out.push(part);
+                    out.push(cloned);
                 }
             } else {
                 out.push(cloneEntity(worldEntity));

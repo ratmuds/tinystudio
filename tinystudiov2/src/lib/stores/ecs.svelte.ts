@@ -1,4 +1,10 @@
-type BaseEntityType = "part" | "model" | "light" | "camera" | "custom";
+type BaseEntityType =
+    | "part"
+    | "model"
+    | "light"
+    | "camera"
+    | "constraint"
+    | "custom";
 
 class Entity {
     id: string = $state("");
@@ -150,6 +156,50 @@ function createModelRefComponent(modelId: string): Component {
     return c;
 }
 
+function createConstraintComponent(): Component {
+    const c = new Component();
+    c.id = crypto.randomUUID();
+    c.name = "Constraint";
+    c.tooltip = "Defines a physics constraint between two entities.";
+    c.data = {
+        entityA: makeEntry("string", "", "ID of the first entity"),
+        entityB: makeEntry("string", "", "ID of the second entity"),
+        localPosA: makeEntry(
+            "vector3",
+            { x: 0, y: 0, z: 0 },
+            "Attachment point in entity A's local space",
+        ),
+        localPosB: makeEntry(
+            "vector3",
+            { x: 0, y: 0, z: 0 },
+            "Attachment point in entity B's local space",
+        ),
+        constraintType: makeEntry(
+            "string",
+            "fixed",
+            "Type: fixed, hinge, ballSocket",
+        ),
+        axisA: makeEntry(
+            "vector3",
+            { x: 0, y: 1, z: 0 },
+            "Hinge axis in entity A's local space",
+        ),
+        axisB: makeEntry(
+            "vector3",
+            { x: 0, y: 1, z: 0 },
+            "Hinge axis in entity B's local space",
+        ),
+        limitsEnabled: makeEntry(
+            "boolean",
+            false,
+            "Whether angular limits are enabled",
+        ),
+        limitMin: makeEntry("number", -180, "Minimum angle in degrees"),
+        limitMax: makeEntry("number", 180, "Maximum angle in degrees"),
+    };
+    return c;
+}
+
 function clearDirtyFlags(entities: Entity[]): void {
     for (const entity of entities) {
         for (const component of entity.components) {
@@ -177,6 +227,15 @@ function createPartEntity(name: string = "Part"): Entity {
     return e;
 }
 
+function createConstraintEntity(name: string = "Constraint"): Entity {
+    const e = new Entity();
+    e.id = crypto.randomUUID();
+    e.name = name;
+    e.baseEntity = "constraint";
+    e.components = [createConstraintComponent()];
+    return e;
+}
+
 export {
     type BaseEntityType,
     Entity,
@@ -191,4 +250,5 @@ export {
     createPhysicsComponent,
     createModelRefComponent,
     createPartEntity,
+    createConstraintEntity,
 };

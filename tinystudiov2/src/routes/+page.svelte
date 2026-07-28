@@ -7,6 +7,8 @@
     import ScriptWorkspace from "$lib/components/editor/workspaces/ScriptWorkspace.svelte";
     import RuntimeWorkspace from "$lib/components/editor/workspaces/Runtime.svelte";
 
+    import * as Command from "$lib/components/ui/command/index.js";
+
     import { untrack } from "svelte";
     import type { MenuItem, StudioTab, WorkspaceKind } from "$lib/types/editor";
     import {
@@ -240,7 +242,89 @@
             else if (kind === "world") createNewWorld();
         }
     }
+
+    let addTabTypeModalOpen = $state(false);
+    let addTabDataModalOpen = $state(false);
+    let addTabDataSearchModel = $state("");
+
+    function handleKeydown(e: KeyboardEvent) {
+        // Don't trigger shortcuts when typing in inputs
+        const tag = (e.target as HTMLElement)?.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA") return;
+
+        if (e.key === "o" && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault();
+            addTabTypeModalOpen = !addTabTypeModalOpen;
+        }
+    }
+
+    function handleTabTypeSelect(type: "World" | "Model" | "Script") {
+        console.log("Selected tab type:", type);
+        addTabTypeModalOpen = false;
+
+        if (type === "Model") {
+            addTabDataModalOpen = true;
+        } else {
+            alert("not supported rn :(");
+        }
+    }
 </script>
+
+<svelte:document onkeydown={handleKeydown} />
+
+<Command.Dialog bind:open={addTabTypeModalOpen} class="rounded-xl p-5">
+    <Command.Input placeholder="Search for a tab type..." />
+    <Command.List class="mt-3">
+        <Command.Empty>No results found.</Command.Empty>
+        <Command.Group heading="Tabs">
+            <Command.Item onSelect={() => handleTabTypeSelect("World")}>
+                World
+            </Command.Item>
+            <Command.Item onSelect={() => handleTabTypeSelect("Model")}>
+                Model
+            </Command.Item>
+            <Command.Item onSelect={() => handleTabTypeSelect("Script")}>
+                Script
+            </Command.Item>
+        </Command.Group>
+    </Command.List>
+</Command.Dialog>
+
+<Command.Dialog bind:open={addTabDataModalOpen} class="rounded-xl p-5">
+    <Command.Input
+        bind:value={addTabDataSearchModel}
+        placeholder="Search for a file..."
+    />
+    <Command.List class="mt-3">
+        <Command.Empty>No results found.</Command.Empty>
+        <Command.Group heading="Actions" forceMount={true}>
+            <Command.Item
+                forceMount={true}
+                onSelect={() => {
+                    createNewModel(addTabDataSearchModel);
+                    addTabDataModalOpen = false;
+                }}
+            >
+                Create New Model {addTabDataSearchModel
+                    ? `(${addTabDataSearchModel})`
+                    : ""}
+            </Command.Item>
+        </Command.Group>
+        <Command.Separator />
+        <Command.Group heading="Existing Models">
+            {#each gameData.models as model}
+                <Command.Item
+                    onSelect={() => {
+                        openModelTab(model.name, model);
+                        addTabDataModalOpen = false;
+                    }}
+                >
+                    {model.name}
+                </Command.Item>
+            {/each}
+        </Command.Group>
+    </Command.List>
+</Command.Dialog>
 
 <SplashScreen />
 
@@ -253,7 +337,13 @@
         onsave={triggerSave}
     />
 
-    <TabBar bind:tabs bind:activeTab />
+    <TabBar
+        bind:tabs
+        bind:activeTab
+        createTab={() => {
+            addTabTypeModalOpen = true;
+        }}
+    />
 
     {#if activeWorkspace === "world"}
         {@const worldData = activeWorldData()}

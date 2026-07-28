@@ -10,6 +10,8 @@ export class PhysicsSystem extends System {
     private joltInterface: any = null;
     private bodyInterface: any = null;
     private bodyByEntityId = new Map<string, any>();
+    private joltBodyByEntityId = new Map<string, any>();
+    private joltConstraints: any[] = [];
 
     constructor(scene: THREE.Scene, gameData: GameData) {
         super();
@@ -59,7 +61,38 @@ export class PhysicsSystem extends System {
         let physicsSystem = this.joltInterface.GetPhysicsSystem();
         this.bodyInterface = physicsSystem.GetBodyInterface();
 
+        let constraints = [];
+
         for (const entity of entities) {
+            // Check if it is a constraint
+            const constraintComp = entity.components.find(
+                (c) => c.name === "Constraint",
+            );
+
+            if (constraintComp) {
+                const entityAId = constraintComp.data.entityA.value;
+                const entityBId = constraintComp.data.entityB.value;
+
+                const entityA = entities.find((e) => e.id === entityAId);
+                const entityB = entities.find((e) => e.id === entityBId);
+
+                if (!entityA || !entityB) {
+                    console.warn(
+                        `Constraint ${entity.id} references non-existent entities.`,
+                    );
+                    continue;
+                }
+
+                // We need to store this for later since the physics bodies for entityA and entityB might not be created yet
+                constraints.push({
+                    entityA,
+                    entityB,
+                    constraintComp,
+                });
+
+                // don't continue, because it is technically possible for the user to add it as a component to a physics body manually
+            }
+
             const physicsComp = entity.components.find(
                 (c) => c.name === "Physics",
             );
@@ -94,7 +127,19 @@ export class PhysicsSystem extends System {
                 transformComp.data.position.value.y,
                 transformComp.data.position.value.z,
             );
-            let bodyRotation = new this.jolt.Quat(0, 0, 0, 1);
+            // Convert Euler rotation to quaternion
+            let euler = new THREE.Euler(
+                transformComp.data.rotation.value.x,
+                transformComp.data.rotation.value.y,
+                transformComp.data.rotation.value.z,
+            );
+            let quaternion = new THREE.Quaternion().setFromEuler(euler);
+            let bodyRotation = new this.jolt.Quat(
+                quaternion.x,
+                quaternion.y,
+                quaternion.z,
+                quaternion.w,
+            );
             let creationSettings = new this.jolt.BodyCreationSettings(
                 boxShape,
                 bodyPosition,
@@ -121,6 +166,69 @@ export class PhysicsSystem extends System {
                 body.GetID(),
             );
             this.bodyByEntityId.set(entity.id, body.GetID());
+            this.joltBodyByEntityId.set(entity.id, body);
+        }
+
+        console.log("constraints:", constraints);
+
+        // Now that all bodies are created, create constraints
+        for (const { entityA, entityB, constraintComp } of constraints) {
+            const joltBodyA = this.joltBodyByEntityId.get(entityA.id);
+            const joltBodyB = this.joltBodyByEntityId.get(entityB.id);
+
+            if (!joltBodyA || !joltBodyB) {
+                console.warn(
+                    `Constraint references entities without physics bodies.`,
+                );
+                continue;
+            }
+
+            const constraintType = constraintComp.data.constraintType
+                .value as string;
+
+            console.log(
+                "Creating",
+                constraintType,
+                "constraint between",
+                entityA.id,
+                "and",
+                entityB.id,
+            );
+
+            let constraint: any = null;
+
+            switch (constraintType) {
+                case "hinge": {
+                    const settings = new this.jolt.HingeConstraintSettings();
+                    settings.mAutoDetectPoint = true;
+                    // TODO: set axis/limits from constraintComp data
+                    constraint = settings.Create(joltBodyA, joltBodyB);
+                    break;
+                }
+                case "ballSocket": {
+                    const settings =
+                        new this.jolt.SwingTwistConstraintSettings();
+                    settings.mAutoDetectPoint = true;
+                    // TODO: set swing/twist limits from constraintComp data
+                    constraint = settings.Create(joltBodyA, joltBodyB);
+                    break;
+                }
+                case "fixed":
+                default: {
+                    const settings = new this.jolt.FixedConstraintSettings();
+                    settings.mAutoDetectPoint = true;
+                    constraint = settings.Create(joltBodyA, joltBodyB);
+                    break;
+                }
+            }
+
+            if (constraint) {
+                physicsSystem.AddConstraint(constraint);
+                this.joltConstraints.push(constraint);
+                console.log(
+                    `Created ${constraintType} constraint between ${entityA.id} and ${entityB.id}`,
+                );
+            }
         }
     }
 
@@ -144,7 +252,6 @@ export class PhysicsSystem extends System {
                 z: pos.GetZ(),
             };
             transformComp.data.position.dirty = true;
-            console.log(transformComp.data.position.value);
 
             // Read rotation FROM physics body (convert quaternion to Euler)
             const rot = this.bodyInterface.GetRotation(bodyID);
@@ -167,12 +274,22 @@ export class PhysicsSystem extends System {
     cleanup(): void {
         if (!this.scene) return;
 
+        // Remove constraints first
+        if (this.joltInterface) {
+            const physicsSystem = this.joltInterface.GetPhysicsSystem();
+            for (const constraint of this.joltConstraints) {
+                physicsSystem.RemoveConstraint(constraint);
+            }
+        }
+        this.joltConstraints = [];
+
         for (const [id, bodyID] of this.bodyByEntityId) {
             this.bodyInterface.RemoveBody(bodyID);
             this.bodyInterface.DestroyBody(bodyID);
         }
 
         this.bodyByEntityId.clear();
+        this.joltBodyByEntityId.clear();
 
         if (this.joltInterface) {
             this.jolt.destroy(this.joltInterface);
