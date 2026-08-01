@@ -35,6 +35,7 @@
         SquaresSubtract,
         Paintbrush,
         CirclePlus,
+        FileCode2,
     } from "@lucide/svelte";
 
     import {
@@ -46,6 +47,7 @@
     import * as ECS from "$lib/stores/ecs.svelte";
     import { onMount } from "svelte";
     import { generateObjectPreview } from "$lib/threeThumbnailGen";
+    import JsonInput from "$lib/components/editor/sidebar/JsonInput.svelte";
 
     let {
         modelData,
@@ -60,6 +62,7 @@
     );
 
     let addEntityModalOpen = $state(false);
+    let addComponentModalOpen = $state(false);
     let saved = $state(false);
     // ─── ECS ↔ Three.js sync ────────────────────────────────────────────
     // Maps entity ID → Three.js mesh so we can update/remove meshes when ECS data changes.
@@ -268,6 +271,21 @@
             // TODO: createLightEntity()
         }
         addEntityModalOpen = false;
+    }
+
+    function handleAddComponent(componentType: string) {
+        if (selectedPartIds.length === 0) return;
+        const entity = modelData.entities.find(
+            (e) => e.id === selectedPartIds[0],
+        );
+        if (!entity) return;
+
+        if (componentType === "Script") {
+            const component = ECS.createScriptComponent();
+            entity.components.push(component);
+            console.log("Attached Script component to", entity.name);
+        }
+        addComponentModalOpen = false;
     }
 
     function handleKeydown(e: KeyboardEvent) {
@@ -510,14 +528,26 @@
     <Command.List class="mt-3">
         <Command.Empty>No results found.</Command.Empty>
         <Command.Group heading="Suggestions">
-            <Command.Item onselect={() => handleEntitySelect("Part")}
+            <Command.Item onSelect={() => handleEntitySelect("Part")}
                 >Part</Command.Item
             >
-            <Command.Item onselect={() => handleEntitySelect("Camera")}
+            <Command.Item onSelect={() => handleEntitySelect("Camera")}
                 >Camera</Command.Item
             >
-            <Command.Item onselect={() => handleEntitySelect("Light")}
+            <Command.Item onSelect={() => handleEntitySelect("Light")}
                 >Light</Command.Item
+            >
+        </Command.Group>
+    </Command.List>
+</Command.Dialog>
+
+<Command.Dialog bind:open={addComponentModalOpen} class="rounded-xl p-5">
+    <Command.Input placeholder="Search for a component..." />
+    <Command.List class="mt-3">
+        <Command.Empty>No results found.</Command.Empty>
+        <Command.Group heading="Components">
+            <Command.Item onSelect={() => handleAddComponent("Script")}
+                >Script</Command.Item
             >
         </Command.Group>
     </Command.List>
@@ -758,7 +788,8 @@
                     <Tooltip.Provider>
                         <Tooltip.Root>
                             <Tooltip.Trigger
-                                onclick={() => (placingConstraint = !placingConstraint)}
+                                onclick={() =>
+                                    (placingConstraint = !placingConstraint)}
                                 class="rounded-md px-3 py-3 text-sm font-bold tracking-wide shadow-sm duration-150 {placingConstraint
                                     ? 'bg-background text-green-500'
                                     : 'hover:bg-background/50 hover:text-green-500'}"
@@ -963,6 +994,33 @@
                                             class="my-2 h-10 w-full rounded-md border-2 border-border/60 bg-background duration-150 outline-none focus:border-green-700"
                                         />
                                     </div>
+                                {:else if entry.type === "script"}
+                                    <div>
+                                        <p class="mb-1 text-sm">{key}</p>
+                                        <select
+                                            bind:value={entry.value}
+                                            class="my-2 w-full rounded-md border-2 border-border/60 bg-background px-3 py-2 text-sm duration-150 outline-none focus:border-green-700"
+                                        >
+                                            <option value=""> (none) </option>
+                                            {#each gameData.scripts as script}
+                                                <option value={script.id}>
+                                                    {script.name}
+                                                </option>
+                                            {/each}
+                                        </select>
+                                    </div>
+                                {:else if entry.type === "json"}
+                                    <JsonInput
+                                        bind:value={entry.value}
+                                        label={key}
+                                        rows={6}
+                                    />
+                                {:else if entry.type === "jsonList"}
+                                    <JsonInput
+                                        bind:value={entry.value}
+                                        label={key}
+                                        rows={6}
+                                    />
                                 {:else}
                                     <div>
                                         <p class="mb-1 text-sm">{key}</p>
@@ -977,6 +1035,14 @@
                         {/each}
                     {/each}
                 {/each}
+
+                <button
+                    onclick={() => (addComponentModalOpen = true)}
+                    class="mt-4 flex w-full items-center justify-center gap-1.5 rounded-md border-2 border-dashed border-border/60 px-3 py-2 text-sm text-muted-foreground transition-colors hover:border-green-700/60 hover:text-green-500"
+                >
+                    <CirclePlus class="h-4 w-4" />
+                    Add Component
+                </button>
             {/if}
         </div>
     </Resizable.Pane>

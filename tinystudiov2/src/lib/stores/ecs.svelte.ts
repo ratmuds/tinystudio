@@ -26,7 +26,9 @@ type ComponentDataEntry = {
         | "texture"
         | "entity"
         | "model"
-        | "script";
+        | "script"
+        | "json"
+        | "jsonList";
     defaultValue: any;
     value: any;
 
@@ -156,6 +158,32 @@ function createModelRefComponent(modelId: string): Component {
     return c;
 }
 
+function createScriptComponent(scriptId: string = ""): Component {
+    const c = new Component();
+    c.id = crypto.randomUUID();
+    c.name = "Script";
+    c.tooltip =
+        "Attaches a script to this entity. Holds per-instance stateData (JSON object) and scriptData (JSON list of blocks, each with a `code` field).";
+    c.data = {
+        scriptId: makeEntry(
+            "script",
+            scriptId,
+            "ID of the authored script in gameData.scripts[] to attach",
+        ),
+        stateData: makeEntry(
+            "json",
+            {},
+            "Per-instance state (JSON object)",
+        ),
+        scriptData: makeEntry(
+            "jsonList",
+            [{ code: "" }],
+            "Per-instance script blocks (JSON list; each block has a `code` field)",
+        ),
+    };
+    return c;
+}
+
 function createConstraintComponent(): Component {
     const c = new Component();
     c.id = crypto.randomUUID();
@@ -249,6 +277,7 @@ export {
     createMeshComponent,
     createPhysicsComponent,
     createModelRefComponent,
+    createScriptComponent,
     createPartEntity,
     createConstraintEntity,
 };

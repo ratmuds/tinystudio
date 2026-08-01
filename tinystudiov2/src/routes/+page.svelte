@@ -16,6 +16,7 @@
         ModelData,
         RuntimeData,
         WorldData,
+        ScriptData,
     } from "$lib/stores/data.svelte";
 
     // ─── Single source of truth ──────────────────────────────────────────
@@ -37,7 +38,9 @@
     let activeTab = $state<string>("");
 
     /** Find the data object for a given tab. */
-    function dataForTab(tab: StudioTab): ModelData | WorldData | undefined {
+    function dataForTab(
+        tab: StudioTab,
+    ): ModelData | WorldData | ScriptData | undefined {
         if (!tab.dataId) return undefined;
         if (tab.kind === "model")
             return gameData.models.find((m) => m.id === tab.dataId);
@@ -45,6 +48,8 @@
             return gameData.worlds.find(
                 (w) => w.id === tab.dataId,
             ) as unknown as WorldData;
+        if (tab.kind === "script")
+            return gameData.scripts.find((s) => s.id === tab.dataId);
         return undefined;
     }
 
@@ -60,6 +65,13 @@
         const tab = tabs.find((t) => t.id === activeTab);
         return tab?.kind === "world"
             ? (dataForTab(tab) as WorldData | undefined)
+            : undefined;
+    }
+
+    function activeScriptData(): ScriptData | undefined {
+        const tab = tabs.find((t) => t.id === activeTab);
+        return tab?.kind === "script"
+            ? (dataForTab(tab) as ScriptData | undefined)
             : undefined;
     }
 
@@ -90,6 +102,31 @@
         const model = new ModelData(name ?? "Untitled Model");
         gameData.models.push(model);
         openModelTab(model.name, model);
+    }
+
+    function openScriptTab(name: string, scriptData: ScriptData) {
+        const existing = tabs.find(
+            (t) => t.dataId === scriptData.id && t.kind === "script",
+        );
+        if (existing) {
+            activeTab = existing.id;
+            return;
+        }
+        const tab: StudioTab = {
+            id: crypto.randomUUID(),
+            name,
+            kind: "script",
+            dirty: false,
+            dataId: scriptData.id,
+        };
+        tabs.push(tab);
+        activeTab = tab.id;
+    }
+
+    function createNewScript(name?: string) {
+        const script = new ScriptData(name ?? "Untitled Script");
+        gameData.scripts.push(script);
+        openScriptTab(script.name, script);
     }
 
     function openWorldTab(name: string, worldData: WorldData) {
@@ -133,6 +170,7 @@
     if (untrack(() => tabs.length === 0)) {
         createNewWorld("Lobby");
         createNewModel("My Model");
+        createNewScript("My Script");
         openTestTab();
     }
 
@@ -227,6 +265,7 @@
         } else {
             if (ws === "model") createNewModel();
             else if (ws === "world") createNewWorld();
+            else if (ws === "script") createNewScript();
         }
     });
 
@@ -240,12 +279,15 @@
             // Create a new tab of the right kind
             if (kind === "model") createNewModel();
             else if (kind === "world") createNewWorld();
+            else if (kind === "script") createNewScript();
         }
     }
 
     let addTabTypeModalOpen = $state(false);
     let addTabDataModalOpen = $state(false);
     let addTabDataSearchModel = $state("");
+    let addScriptDataModalOpen = $state(false);
+    let addScriptDataSearch = $state("");
 
     function handleKeydown(e: KeyboardEvent) {
         // Don't trigger shortcuts when typing in inputs
@@ -264,6 +306,8 @@
 
         if (type === "Model") {
             addTabDataModalOpen = true;
+        } else if (type === "Script") {
+            addScriptDataModalOpen = true;
         } else {
             alert("not supported rn :(");
         }
@@ -326,6 +370,42 @@
     </Command.List>
 </Command.Dialog>
 
+<Command.Dialog bind:open={addScriptDataModalOpen} class="rounded-xl p-5">
+    <Command.Input
+        bind:value={addScriptDataSearch}
+        placeholder="Search for a script..."
+    />
+    <Command.List class="mt-3">
+        <Command.Empty>No results found.</Command.Empty>
+        <Command.Group heading="Actions" forceMount={true}>
+            <Command.Item
+                forceMount={true}
+                onSelect={() => {
+                    createNewScript(addScriptDataSearch);
+                    addScriptDataModalOpen = false;
+                }}
+            >
+                Create New Script {addScriptDataSearch
+                    ? `(${addScriptDataSearch})`
+                    : ""}
+            </Command.Item>
+        </Command.Group>
+        <Command.Separator />
+        <Command.Group heading="Existing Scripts">
+            {#each gameData.scripts as script}
+                <Command.Item
+                    onSelect={() => {
+                        openScriptTab(script.name, script);
+                        addScriptDataModalOpen = false;
+                    }}
+                >
+                    {script.name}
+                </Command.Item>
+            {/each}
+        </Command.Group>
+    </Command.List>
+</Command.Dialog>
+
 <SplashScreen />
 
 <div class="flex h-dvh flex-col">
@@ -368,7 +448,21 @@
             </div>
         {/if}
     {:else if activeWorkspace === "script"}
-        <ScriptWorkspace />
+        {@const scriptData = activeScriptData()}
+        {#if scriptData}
+            <ScriptWorkspace
+                {scriptData}
+                {gameData}
+                openScript={(s) => openScriptTab(s.name, s)}
+                onNewScript={() => createNewScript()}
+            />
+        {:else}
+            <div
+                class="flex h-full items-center justify-center text-muted-foreground"
+            >
+                <p>No script selected. Open a script tab to start editing.</p>
+            </div>
+        {/if}
     {:else if activeWorkspace === "test"}
         <RuntimeWorkspace {runtimeData} />
     {/if}

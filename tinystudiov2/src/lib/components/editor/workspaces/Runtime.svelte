@@ -12,6 +12,7 @@
     } from "$lib/stores/ecs.svelte";
     import { MeshSystem } from "$lib/systems/MeshSystem.svelte";
     import { PhysicsSystem } from "$lib/systems/PhysicsSystem.svelte";
+    import { ScriptingSystem } from "$lib/systems/ScriptingSystem.svelte";
 
     let {
         runtimeData,
@@ -83,9 +84,7 @@
             name: entity.name,
             baseEntity: entity.baseEntity,
             components: entity.components.map((c) => ({
-                id: instanceId
-                    ? `${instanceId}:${c.id}`
-                    : crypto.randomUUID(),
+                id: instanceId ? `${instanceId}:${c.id}` : crypto.randomUUID(),
                 name: c.name,
                 tooltip: c.tooltip,
                 data: structuredClone($state.snapshot(c.data)),
@@ -133,11 +132,9 @@
                             const refB = constraintComp.data.entityB
                                 .value as string;
                             if (refA)
-                                constraintComp.data.entityA.value =
-                                    `${instanceId}:${refA}`;
+                                constraintComp.data.entityA.value = `${instanceId}:${refA}`;
                             if (refB)
-                                constraintComp.data.entityB.value =
-                                    `${instanceId}:${refB}`;
+                                constraintComp.data.entityB.value = `${instanceId}:${refB}`;
                         }
                         out.push(cloned);
                         continue;
@@ -231,6 +228,12 @@
 
         const physicsSystem = new PhysicsSystem(scene, runtimeData.gameData);
         runtimeData.systems.push(physicsSystem);
+
+        const scriptingSystem = new ScriptingSystem(
+            scene,
+            runtimeData.gameData,
+        );
+        runtimeData.systems.push(scriptingSystem);
 
         // Setup systems (await async setups like PhysicsSystem)
         for (const system of runtimeData.systems) {

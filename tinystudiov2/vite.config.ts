@@ -19,4 +19,7 @@ export default defineConfig({
       adapter: adapter(),
     }),
   ],
+  worker: {
+    format: "es",
+  },
 });

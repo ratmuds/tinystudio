@@ -9,6 +9,7 @@ export class GameData {
 
     worlds: WorldData[] = $state([]); // All worlds in this game
     models: ModelData[] = $state([]); // All models in the game (reusable across worlds)
+    scripts: ScriptData[] = $state([]); // All scripts in the game (reusable across entities)
 }
 
 export class RuntimeData {
@@ -70,5 +71,51 @@ export class ModelWorkspaceData extends WorkspaceData {
     constructor(modelData: ModelData, id?: string) {
         super(id || crypto.randomUUID(), "model");
         this.modelData = modelData;
+    }
+}
+
+export class ScriptData {
+    id: string = $state("");
+    name: string = $state("");
+
+    // JSON object describing the default/initial state shape of the script.
+    stateData: any = $state({});
+    // JSON list of script blocks. Each block is an object with at least a
+    // `code` field holding the Luau source. Stored as JSON so additional
+    // metadata (language, enabled, etc.) can be added per-block later.
+    scriptData: any[] = $state([
+        {
+            code: `function wait(seconds)
+    coroutine.yield(seconds or 0)
+end
+
+function gameLoop()
+    local frameCount = 0
+
+    while true do
+        frameCount = frameCount + 1
+
+        print("Frame:", frameCount)
+
+        wait(1)
+    end
+end
+
+mainThread = coroutine.create(gameLoop)`,
+        },
+    ]);
+
+    constructor(name: string, id?: string) {
+        this.id = id || crypto.randomUUID();
+        this.name = name;
+    }
+}
+
+export class ScriptWorkspaceData extends WorkspaceData {
+    scriptData: ScriptData = $state(new ScriptData(""));
+
+    constructor(scriptData: ScriptData, id?: string) {
+        super(id || crypto.randomUUID(), "script");
+        this.scriptData = scriptData;
     }
 }
