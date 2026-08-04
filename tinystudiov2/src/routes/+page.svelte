@@ -94,8 +94,6 @@
         };
         tabs.push(tab);
         activeTab = tab.id;
-
-        console.log("Opened model tab:", tab, "Current tabs:", tabs);
     }
 
     function createNewModel(name?: string) {
@@ -182,7 +180,6 @@
         if (saving) return;
         saving = true;
         saved = false;
-        console.log("Saving gameData:", gameData);
         setTimeout(() => {
             saving = false;
             saved = true;
@@ -301,7 +298,6 @@
     }
 
     function handleTabTypeSelect(type: "World" | "Model" | "Script") {
-        console.log("Selected tab type:", type);
         addTabTypeModalOpen = false;
 
         if (type === "Model") {

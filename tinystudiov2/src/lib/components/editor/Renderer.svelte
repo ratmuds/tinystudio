@@ -836,12 +836,6 @@
                     placeConstraintPartB = getCursorEntityId();
                 }
 
-                console.log(
-                    "Finalizing constraint between",
-                    placeConstraintPartA,
-                    "and",
-                    placeConstraintPartB,
-                );
                 finalizeConstraint();
             }
         }

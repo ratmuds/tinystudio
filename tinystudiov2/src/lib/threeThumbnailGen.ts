@@ -11,8 +11,6 @@ export async function generateObjectPreview(
     entities: ECS.Entity[],
     size = 256,
 ) {
-    console.log("Generating object preview for entities:", entities);
-
     // 1. Create dedicated offscreen renderer
     const renderer = new THREE.WebGLRenderer({
         antialias: true,
@@ -35,8 +33,6 @@ export async function generateObjectPreview(
     // 3. Init entities
     const previewObject = new THREE.Group();
     for (const entity of entities) {
-        console.log(entity);
-        console.log(entity.components);
         const transformComponent = entity.components.find(
             (c) => c.name === "Transform",
         ) as ECS.Component | undefined;

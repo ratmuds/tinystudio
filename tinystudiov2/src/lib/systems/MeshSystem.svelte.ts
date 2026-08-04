@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { System, type Entity } from "$lib/stores/ecs.svelte";
 import type { GameData } from "$lib/stores/data.svelte";
+import { createGeometry, createMesh, applyTransform, type Vec3 } from "$lib/utils/geometry";
 
 export class MeshSystem extends System {
     private scene: THREE.Scene | null = null;
@@ -21,7 +22,6 @@ export class MeshSystem extends System {
     setup(entities: Entity[]): void {
         if (!this.scene || !this.gameData) return;
         for (const entity of entities) {
-            console.log("Spawning entity", entity.id, "in MeshSystem");
             this.spawnEntity(entity);
         }
     }
@@ -37,35 +37,20 @@ export class MeshSystem extends System {
             if (!transformComp) continue;
 
             if (transformComp.data.position.dirty) {
-                const pos = transformComp.data.position.value as {
-                    x: number;
-                    y: number;
-                    z: number;
-                };
+                const pos = transformComp.data.position.value as Vec3;
                 group.position.set(pos.x, pos.y, pos.z);
-
                 transformComp.data.position.dirty = false;
             }
 
             if (transformComp.data.rotation.dirty) {
-                const rot = transformComp.data.rotation.value as {
-                    x: number;
-                    y: number;
-                    z: number;
-                };
+                const rot = transformComp.data.rotation.value as Vec3;
                 group.rotation.set(rot.x, rot.y, rot.z);
-
                 transformComp.data.rotation.dirty = false;
             }
 
             if (transformComp.data.scale.dirty) {
-                const scl = transformComp.data.scale.value as {
-                    x: number;
-                    y: number;
-                    z: number;
-                };
+                const scl = transformComp.data.scale.value as Vec3;
                 group.scale.set(scl.x, scl.y, scl.z);
-
                 transformComp.data.scale.dirty = false;
             }
         }
@@ -101,60 +86,19 @@ export class MeshSystem extends System {
         if (!transformComp || !meshComp) return;
 
         const geomType = meshComp.data.geometryType.value as string;
-        const size = meshComp.data.size.value as {
-            x: number;
-            y: number;
-            z: number;
-        };
+        const size = meshComp.data.size.value as Vec3;
         const color = meshComp.data.color.value as number;
 
-        let geometry: THREE.BufferGeometry;
-        switch (geomType) {
-            case "sphere":
-                geometry = new THREE.SphereGeometry(size.x / 2);
-                break;
-            case "cylinder":
-                geometry = new THREE.CylinderGeometry(
-                    size.x / 2,
-                    size.x / 2,
-                    size.y,
-                );
-                break;
-            default:
-                geometry = new THREE.BoxGeometry(size.x, size.y, size.z);
-        }
-
-        const mesh = new THREE.Mesh(
-            geometry,
-            new THREE.MeshStandardMaterial({ color }),
-        );
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        mesh.userData.entityId = entity.id;
+        const geometry = createGeometry(geomType, size);
+        const mesh = createMesh(geometry, color, entity.id);
 
         const group = new THREE.Group();
         group.add(mesh);
 
-        const pos = transformComp.data.position.value as {
-            x: number;
-            y: number;
-            z: number;
-        };
-        group.position.set(pos.x, pos.y, pos.z);
-
-        const rot = transformComp.data.rotation.value as {
-            x: number;
-            y: number;
-            z: number;
-        };
-        group.rotation.set(rot.x, rot.y, rot.z);
-
-        const scl = transformComp.data.scale.value as {
-            x: number;
-            y: number;
-            z: number;
-        };
-        group.scale.set(scl.x, scl.y, scl.z);
+        const pos = transformComp.data.position.value as Vec3;
+        const rot = transformComp.data.rotation.value as Vec3;
+        const scl = transformComp.data.scale.value as Vec3;
+        applyTransform(group, pos, rot, scl);
 
         group.userData.entityId = entity.id;
         this.scene.add(group);

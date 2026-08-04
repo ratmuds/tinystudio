@@ -25,12 +25,10 @@ export class PhysicsSystem extends System {
     }
 
     async setup(entities: Entity[]): Promise<void> {
-        console.log("Setting up PhysicsSystem...");
         this.jolt = await initJolt();
 
         if (!this.scene || !this.gameData) return;
 
-        console.log("Setting up physics...");
         const MY_LAYER = 0;
         let objectFilter = new this.jolt.ObjectLayerPairFilterTable(1);
         objectFilter.EnableCollision(MY_LAYER, MY_LAYER);
@@ -109,8 +107,6 @@ export class PhysicsSystem extends System {
                 ? this.jolt.EMotionType_Static
                 : this.jolt.EMotionType_Dynamic;
 
-            console.warn("only box colliders supported rn!!!");
-
             // Create a box shape for the entity
             let boxShape = new this.jolt.BoxShape(
                 new this.jolt.Vec3(
@@ -159,17 +155,9 @@ export class PhysicsSystem extends System {
             );
 
             // Store the bodyID in the map for later use
-            console.log(
-                "Created physics body for entity",
-                entity.id,
-                "with bodyID",
-                body.GetID(),
-            );
             this.bodyByEntityId.set(entity.id, body.GetID());
             this.joltBodyByEntityId.set(entity.id, body);
         }
-
-        console.log("constraints:", constraints);
 
         // Now that all bodies are created, create constraints
         for (const { entityA, entityB, constraintComp } of constraints) {
@@ -185,15 +173,6 @@ export class PhysicsSystem extends System {
 
             const constraintType = constraintComp.data.constraintType
                 .value as string;
-
-            console.log(
-                "Creating",
-                constraintType,
-                "constraint between",
-                entityA.id,
-                "and",
-                entityB.id,
-            );
 
             let constraint: any = null;
 
@@ -225,9 +204,6 @@ export class PhysicsSystem extends System {
             if (constraint) {
                 physicsSystem.AddConstraint(constraint);
                 this.joltConstraints.push(constraint);
-                console.log(
-                    `Created ${constraintType} constraint between ${entityA.id} and ${entityB.id}`,
-                );
             }
         }
     }

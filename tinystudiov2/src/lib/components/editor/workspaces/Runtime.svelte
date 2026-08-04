@@ -206,8 +206,6 @@
             system.update(deltaTime, entities);
         }
 
-        //clearDirtyFlags(entities);
-
         animationId = requestAnimationFrame(gameLoop);
     }
 

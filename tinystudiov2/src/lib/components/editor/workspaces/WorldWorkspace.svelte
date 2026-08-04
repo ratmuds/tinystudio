@@ -3,11 +3,8 @@
     import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
     import Renderer from "$lib/components/editor/Renderer.svelte";
     import ModelPreview from "$lib/components/editor/sidebar/ModelPreview.svelte";
-    import Vector3Input from "$lib/components/editor/sidebar/Vector3Input.svelte";
-    import RotationInput from "$lib/components/editor/sidebar/RotationInput.svelte";
 
     import * as Resizable from "$lib/components/ui/resizable/index.js";
-    import { Switch } from "$lib/components/ui/switch/index.js";
     import * as Tooltip from "$lib/components/ui/tooltip/index.js";
     import * as Kbd from "$lib/components/ui/kbd/index.js";
 
@@ -27,6 +24,8 @@
     import { GameData, WorldData, ModelData } from "$lib/stores/data.svelte";
     import * as ECS from "$lib/stores/ecs.svelte";
     import type { Entity } from "$lib/stores/ecs.svelte";
+    import { createGeometry, createMesh, type Vec3 } from "$lib/utils/geometry";
+    import ComponentPropertiesPanel from "$lib/components/editor/sidebar/ComponentPropertiesPanel.svelte";
 
     // ─── Props from parent ──────────────────────────────────────────────
     let {
@@ -99,55 +98,19 @@
             if (!meshComp || !partTransform) continue;
 
             const geomType = meshComp.data.geometryType.value as string;
-            const size = meshComp.data.size.value as {
-                x: number;
-                y: number;
-                z: number;
-            };
+            const size = meshComp.data.size.value as Vec3;
             const color = meshComp.data.color.value as number;
 
-            let geometry: THREE.BufferGeometry;
-            switch (geomType) {
-                case "sphere":
-                    geometry = new THREE.SphereGeometry(size.x / 2);
-                    break;
-                case "cylinder":
-                    geometry = new THREE.CylinderGeometry(
-                        size.x / 2,
-                        size.x / 2,
-                        size.y,
-                    );
-                    break;
-                default:
-                    geometry = new THREE.BoxGeometry(size.x, size.y, size.z);
-            }
+            const geometry = createGeometry(geomType, size);
+            const mesh = createMesh(geometry, color, entity.id);
 
-            const mesh = new THREE.Mesh(
-                geometry,
-                new THREE.MeshStandardMaterial({ color }),
-            );
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
-
-            const partPos = partTransform.data.position.value as {
-                x: number;
-                y: number;
-                z: number;
-            };
+            const partPos = partTransform.data.position.value as Vec3;
             mesh.position.set(partPos.x, partPos.y, partPos.z);
 
-            const partRot = partTransform.data.rotation.value as {
-                x: number;
-                y: number;
-                z: number;
-            };
+            const partRot = partTransform.data.rotation.value as Vec3;
             mesh.rotation.set(partRot.x, partRot.y, partRot.z);
 
-            const partScale = partTransform.data.scale.value as {
-                x: number;
-                y: number;
-                z: number;
-            };
+            const partScale = partTransform.data.scale.value as Vec3;
             mesh.scale.set(partScale.x, partScale.y, partScale.z);
 
             // Tag the mesh with the WORLD entity id so the Renderer can
@@ -160,25 +123,13 @@
         }
 
         // Set group position from the world entity's transform
-        const pos = transformComp.data.position.value as {
-            x: number;
-            y: number;
-            z: number;
-        };
+        const pos = transformComp.data.position.value as Vec3;
         group.position.set(pos.x, pos.y, pos.z);
 
-        const rot = transformComp.data.rotation.value as {
-            x: number;
-            y: number;
-            z: number;
-        };
+        const rot = transformComp.data.rotation.value as Vec3;
         group.rotation.set(rot.x, rot.y, rot.z);
 
-        const scl = transformComp.data.scale.value as {
-            x: number;
-            y: number;
-            z: number;
-        };
+        const scl = transformComp.data.scale.value as Vec3;
         group.scale.set(scl.x, scl.y, scl.z);
 
         group.userData.entityId = entity.id;
@@ -236,17 +187,11 @@
         const modelRef = ECS.createModelRefComponent(model.id);
         entity.components.push(modelRef);
 
-        // Physics component
-        //const physicsComp = ECS.createPhysicsComponent();
-        //entity.components.push(physicsComp);
-
         // Add to world data
         worldData.entities.push(entity);
 
         // Create Three.js group
         createGroupForEntity(entity);
-
-        console.log("Spawned model instance:", entity);
     }
 
     /** Delete a world entity and its Three.js group. */
@@ -807,75 +752,9 @@
                     </p>
                 {/if}
 
-                {#each getSelectedPartComponents() as { component, data }}
-                    <div class="mt-5 mb-2 flex items-center gap-2">
-                        <p
-                            class="font-bold tracking-widest text-muted-foreground uppercase"
-                        >
-                            {component.name}
-                        </p>
-                        <div class="h-px flex-1 bg-border/60"></div>
-                    </div>
-
-                    {#each Object.entries(component.data) as [key, entry]}
-                        <div class="flex flex-col gap-3">
-                            {#if entry.type === "vector3"}
-                                <div>
-                                    <p class="mb-1 text-sm">{key}</p>
-                                    {#if key === "rotation"}
-                                        <RotationInput
-                                            components={data}
-                                            {key}
-                                        />
-                                    {:else}
-                                        <Vector3Input components={data} {key} />
-                                    {/if}
-                                </div>
-                            {:else if entry.type === "string"}
-                                <div>
-                                    <p class="mb-1 text-sm">{key}</p>
-                                    <input
-                                        type="text"
-                                        bind:value={entry.value}
-                                        class="my-2 w-full rounded-md border-2 border-border/60 bg-background px-3 py-2 text-sm duration-150 outline-none focus:border-green-700"
-                                    />
-                                </div>
-                            {:else if entry.type === "number"}
-                                <div>
-                                    <p class="mb-1 text-sm">{key}</p>
-                                    <input
-                                        type="number"
-                                        bind:value={entry.value}
-                                        class="my-2 w-full rounded-md border-2 border-border/60 bg-background px-3 py-2 text-sm duration-150 outline-none focus:border-green-700"
-                                    />
-                                </div>
-                            {:else if entry.type === "boolean"}
-                                <div class="flex items-center justify-between">
-                                    <p class="text-sm">{key}</p>
-                                    <Switch bind:checked={entry.value} />
-                                </div>
-                            {:else if entry.type === "color"}
-                                <div>
-                                    <p class="mb-1 text-sm">{key}</p>
-                                    <input
-                                        type="color"
-                                        bind:value={entry.value}
-                                        class="my-2 h-10 w-full rounded-md border-2 border-border/60 bg-background duration-150 outline-none focus:border-green-700"
-                                    />
-                                </div>
-                            {:else}
-                                <div>
-                                    <p class="mb-1 text-sm">{key}</p>
-                                    <input
-                                        type="text"
-                                        bind:value={entry.value}
-                                        class="my-2 w-full rounded-md border-2 border-border/60 bg-background px-3 py-2 text-sm duration-150 outline-none focus:border-green-700"
-                                    />
-                                </div>
-                            {/if}
-                        </div>
-                    {/each}
-                {/each}
+                <ComponentPropertiesPanel
+                    components={getSelectedPartComponents()}
+                />
             {:else}
                 <p class="mb-4 text-xs text-muted-foreground">
                     Select an entity in the world to view its properties.
