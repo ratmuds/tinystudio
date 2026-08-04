@@ -1,3 +1,5 @@
+import { EventEmitter } from "$lib/stores/EventEmitter";
+
 type BaseEntityType =
     | "part"
     | "model"
@@ -12,8 +14,8 @@ class Entity {
     baseEntity: BaseEntityType = $state("part"); // The base entity type determines the default components and behavior of the entity
 
     components: Component[] = $state([]);
-
     children: Entity[] = $state([]);
+    events: EventEmitter = new EventEmitter();
 }
 
 type ComponentDataEntry = {
@@ -170,11 +172,7 @@ function createScriptComponent(scriptId: string = ""): Component {
             scriptId,
             "ID of the authored script in gameData.scripts[] to attach",
         ),
-        stateData: makeEntry(
-            "json",
-            {},
-            "Per-instance state (JSON object)",
-        ),
+        stateData: makeEntry("json", {}, "Per-instance state (JSON object)"),
         scriptData: makeEntry(
             "jsonList",
             [{ code: "" }],
@@ -252,6 +250,7 @@ function createPartEntity(name: string = "Part"): Entity {
         createMeshComponent(),
         createPhysicsComponent(),
     ];
+    e.events = new EventEmitter();
     return e;
 }
 

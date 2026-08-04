@@ -13,6 +13,7 @@
     import { MeshSystem } from "$lib/systems/MeshSystem.svelte";
     import { PhysicsSystem } from "$lib/systems/PhysicsSystem.svelte";
     import { ScriptingSystem } from "$lib/systems/ScriptingSystem.svelte";
+    import { EventEmitter } from "$lib/stores/EventEmitter";
 
     let {
         runtimeData,
@@ -90,6 +91,7 @@
                 data: structuredClone($state.snapshot(c.data)),
             })),
             children: [],
+            events: new EventEmitter(),
         } as Entity;
     }
 

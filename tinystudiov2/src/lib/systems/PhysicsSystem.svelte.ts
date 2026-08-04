@@ -11,7 +11,13 @@ export class PhysicsSystem extends System {
     private bodyInterface: any = null;
     private bodyByEntityId = new Map<string, any>();
     private joltBodyByEntityId = new Map<string, any>();
+    private entityIdByBodyId = new Map<number, string>();
     private joltConstraints: any[] = [];
+    private entities: Entity[] = [];
+    private activationListener: any = null;
+    private contactListener: any = null;
+    private activeContacts = new Set<string>();
+    private eventQueue: { entity: Entity; event: string; data: any }[] = [];
 
     constructor(scene: THREE.Scene, gameData: GameData) {
         super();
@@ -26,6 +32,7 @@ export class PhysicsSystem extends System {
 
     async setup(entities: Entity[]): Promise<void> {
         this.jolt = await initJolt();
+        this.entities = entities;
 
         if (!this.scene || !this.gameData) return;
 
@@ -58,6 +65,136 @@ export class PhysicsSystem extends System {
         // Typing shortcuts
         let physicsSystem = this.joltInterface.GetPhysicsSystem();
         this.bodyInterface = physicsSystem.GetBodyInterface();
+
+        // Activation listener
+        this.activationListener = new this.jolt.BodyActivationListenerJS();
+
+        this.activationListener.OnBodyActivated = (
+            bodyId: any,
+            userData: any,
+        ) => {
+            bodyId = this.jolt.wrapPointer(bodyId, this.jolt.BodyID);
+            const entityId = this.entityIdByBodyId.get(
+                bodyId.GetIndexAndSequenceNumber(),
+            );
+            if (!entityId) return;
+            const entity = this.entities.find((e) => e.id === entityId);
+            if (!entity) return;
+            entity.events.emit("Physics.activated");
+        };
+
+        this.activationListener.OnBodyDeactivated = (
+            bodyId: any,
+            userData: any,
+        ) => {
+            bodyId = this.jolt.wrapPointer(bodyId, this.jolt.BodyID);
+            const entityId = this.entityIdByBodyId.get(
+                bodyId.GetIndexAndSequenceNumber(),
+            );
+            if (!entityId) return;
+            const entity = this.entities.find((e) => e.id === entityId);
+            if (!entity) return;
+            entity.events.emit("Physics.deactivated");
+        };
+        physicsSystem.SetBodyActivationListener(this.activationListener);
+
+        // Contact Listener
+        this.contactListener = new this.jolt.ContactListenerJS();
+
+        // TODO: the contact validator can be used to filter out contacts if wanted later
+        this.contactListener.OnContactValidate = (
+            body1: any,
+            body2: any,
+            baseOffset: any,
+            collideShapeResult: any,
+        ) => {
+            body1 = this.jolt.wrapPointer(body1, this.jolt.Body);
+            body2 = this.jolt.wrapPointer(body2, this.jolt.Body);
+
+            let entityId1 = this.entityIdByBodyId.get(body1.GetID().GetIndexAndSequenceNumber());
+            let entityId2 = this.entityIdByBodyId.get(body2.GetID().GetIndexAndSequenceNumber());
+
+            if (!entityId1 || !entityId2) return;
+
+            let entity1 = this.entities.find((e) => e.id === entityId1);
+            let entity2 = this.entities.find((e) => e.id === entityId2);
+
+            if (!entity1 || !entity2) return;
+
+            entity1.events.emit("Physics.touchValidated", entity2);
+            entity2.events.emit("Physics.touchValidated", entity1);
+
+            return this.jolt.ValidateResult_AcceptAllContactsForThisBodyPair;
+        };
+
+        this.contactListener.OnContactAdded = (
+            body1: any,
+            body2: any,
+            manifold: any,
+            settings: any,
+        ) => {
+            body1 = this.jolt.wrapPointer(body1, this.jolt.Body);
+            body2 = this.jolt.wrapPointer(body2, this.jolt.Body);
+
+            let entityId1 = this.entityIdByBodyId.get(body1.GetID().GetIndexAndSequenceNumber());
+            let entityId2 = this.entityIdByBodyId.get(body2.GetID().GetIndexAndSequenceNumber());
+
+            if (!entityId1 || !entityId2) return;
+
+            let entity1 = this.entities.find((e) => e.id === entityId1);
+            let entity2 = this.entities.find((e) => e.id === entityId2);
+
+            if (!entity1 || !entity2) return;
+
+            entity1.events.emit("Physics.touched", entity2);
+            entity2.events.emit("Physics.touched", entity1);
+        };
+
+        this.contactListener.OnContactPersisted = (
+            body1: any,
+            body2: any,
+            manifold: any,
+            settings: any,
+        ) => {
+            body1 = this.jolt.wrapPointer(body1, this.jolt.Body);
+            body2 = this.jolt.wrapPointer(body2, this.jolt.Body);
+
+            let entityId1 = this.entityIdByBodyId.get(body1.GetID().GetIndexAndSequenceNumber());
+            let entityId2 = this.entityIdByBodyId.get(body2.GetID().GetIndexAndSequenceNumber());
+
+            if (!entityId1 || !entityId2) return;
+
+            let entity1 = this.entities.find((e) => e.id === entityId1);
+            let entity2 = this.entities.find((e) => e.id === entityId2);
+
+            if (!entity1 || !entity2) return;
+
+            entity1.events.emit("Physics.touchPersisted", entity2);
+            entity2.events.emit("Physics.touchPersisted", entity1);
+        };
+        this.contactListener.OnContactRemoved = (subShapePair: any) => {
+            subShapePair = this.jolt.wrapPointer(
+                subShapePair,
+                this.jolt.SubShapeIDPair,
+            );
+            let entityId1 = this.entityIdByBodyId.get(
+                subShapePair.GetBody1ID().GetIndexAndSequenceNumber(),
+            );
+            let entityId2 = this.entityIdByBodyId.get(
+                subShapePair.GetBody2ID().GetIndexAndSequenceNumber(),
+            );
+
+            if (!entityId1 || !entityId2) return;
+
+            let entity1 = this.entities.find((e) => e.id === entityId1);
+            let entity2 = this.entities.find((e) => e.id === entityId2);
+
+            if (!entity1 || !entity2) return;
+
+            entity1.events.emit("Physics.touchRemoved", entity2);
+            entity2.events.emit("Physics.touchRemoved", entity1);
+        };
+        physicsSystem.SetContactListener(this.contactListener);
 
         let constraints = [];
 
@@ -157,6 +294,10 @@ export class PhysicsSystem extends System {
             // Store the bodyID in the map for later use
             this.bodyByEntityId.set(entity.id, body.GetID());
             this.joltBodyByEntityId.set(entity.id, body);
+            this.entityIdByBodyId.set(
+                body.GetID().GetIndexAndSequenceNumber(),
+                entity.id,
+            );
         }
 
         // Now that all bodies are created, create constraints
@@ -306,6 +447,11 @@ export class PhysicsSystem extends System {
             for (const constraint of this.joltConstraints) {
                 physicsSystem.RemoveConstraint(constraint);
             }
+            if (this.contactListener) {
+                physicsSystem.SetContactListener(null);
+                this.jolt.destroy(this.contactListener);
+                this.contactListener = null;
+            }
         }
         this.joltConstraints = [];
 
@@ -316,6 +462,9 @@ export class PhysicsSystem extends System {
 
         this.bodyByEntityId.clear();
         this.joltBodyByEntityId.clear();
+        this.entityIdByBodyId.clear();
+        this.activeContacts.clear();
+        this.entities = [];
 
         if (this.joltInterface) {
             this.jolt.destroy(this.joltInterface);

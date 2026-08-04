@@ -1,9 +1,24 @@
 import * as THREE from "three";
 import { System, type Entity } from "$lib/stores/ecs.svelte";
 import type { GameData } from "$lib/stores/data.svelte";
+import { EventEmitter } from "$lib/stores/EventEmitter";
 import { LuaFactory, LuaReturn, type LuaEngine, type LuaThread } from "wasmoon";
 
 const factory = new LuaFactory();
+
+function extractLuaError(raw: unknown): string {
+    const str = String(raw);
+    // wasmoon embeds JS source code when callbacks throw; pull out the actual error
+    const lines = str.split("\n");
+    for (const line of lines) {
+        const match = line.match(/(TypeError|Error|ReferenceError|RangeError):.+/);
+        if (match) return match[0].trim();
+    }
+    for (let i = lines.length - 1; i >= 0; i--) {
+        if (lines[i].trim()) return lines[i].trim();
+    }
+    return str;
+}
 
 export class ScriptingSystem extends System {
     private scene: THREE.Scene | null = null;
@@ -11,6 +26,10 @@ export class ScriptingSystem extends System {
     private entities: Entity[] = [];
     private running = false;
     private lua: LuaEngine | null = null;
+    private keysPressed: Set<string> = new Set();
+    private inputManagerEvents = new EventEmitter();
+    private onKeyDown: ((e: KeyboardEvent) => void) | null = null;
+    private onKeyUp: ((e: KeyboardEvent) => void) | null = null;
 
     constructor(scene: THREE.Scene, gameData: GameData) {
         super();
@@ -26,6 +45,17 @@ export class ScriptingSystem extends System {
         if (!this.scene || !this.gameData) return;
         this.entities = entities;
         this.running = true;
+
+        this.onKeyDown = (e: KeyboardEvent) => {
+            this.keysPressed.add(e.code);
+            this.inputManagerEvents.emit("keyDown", e.code);
+        };
+        this.onKeyUp = (e: KeyboardEvent) => {
+            this.keysPressed.delete(e.code);
+            this.inputManagerEvents.emit("keyUp", e.code);
+        };
+        window.addEventListener("keydown", this.onKeyDown);
+        window.addEventListener("keyup", this.onKeyUp);
     }
 
     private async createLua(): Promise<LuaEngine> {
@@ -170,6 +200,32 @@ export class ScriptingSystem extends System {
             function Entity:__newindex(key, value)
                 rawset(self, key, value)
             end
+
+            function Entity:on(eventName, callback)
+                __entityOn(self.id, eventName, callback)
+            end
+
+            function Entity:off(eventName, callback)
+                __entityOff(self.id, eventName, callback)
+            end
+
+            function Entity:emit(eventName, ...)
+                __entityEmit(self.id, eventName, ...)
+            end
+
+            game = {
+                inputManager = {
+                    isKeyPressed = function(keyCode)
+                        return __isKeyPressedJS(keyCode)
+                    end,
+                    on = function(self, eventName, callback)
+                        __inputManagerOn(eventName, callback)
+                    end,
+                    off = function(self, eventName, callback)
+                        __inputManagerOff(eventName, callback)
+                    end
+                }
+            }
         `);
 
         // 3. JS Data Fetching Helpers (pure functions, no Lua re-entry)
@@ -181,6 +237,48 @@ export class ScriptingSystem extends System {
             return this.entities.find((e) => e.name === name) ?? false;
         });
 
+        lua.global.set("__isKeyPressedJS", (keyCode: string) => {
+            return this.keysPressed.has(keyCode);
+        });
+
+        lua.global.set(
+            "__inputManagerOn",
+            (eventName: string, cb: Function) => {
+                this.inputManagerEvents.on(eventName, cb);
+            },
+        );
+
+        lua.global.set(
+            "__inputManagerOff",
+            (eventName: string, cb: Function) => {
+                this.inputManagerEvents.off(eventName, cb);
+            },
+        );
+
+        lua.global.set(
+            "__entityOn",
+            (entityId: string, eventName: string, cb: Function) => {
+                const entity = this.entities.find((e) => e.id === entityId);
+                if (entity) entity.events.on(eventName, cb);
+            },
+        );
+
+        lua.global.set(
+            "__entityOff",
+            (entityId: string, eventName: string, cb: Function) => {
+                const entity = this.entities.find((e) => e.id === entityId);
+                if (entity) entity.events.off(eventName, cb);
+            },
+        );
+
+        lua.global.set(
+            "__entityEmit",
+            (entityId: string, eventName: string, ...args: any[]) => {
+                const entity = this.entities.find((e) => e.id === entityId);
+                if (entity) entity.events.emit(eventName, ...args);
+            },
+        );
+
         // 4. Native Lua constructors for Entities (attaches Entity metatable directly in Lua)
         lua.doStringSync(`
             function getEntityById(id)
@@ -189,7 +287,8 @@ export class ScriptingSystem extends System {
                 local e = {
                     id = raw.id,
                     name = raw.name,
-                    _components = raw.components
+                    _components = raw.components,
+                    events = raw.events
                 }
                 return setmetatable(e, Entity)
             end
@@ -200,7 +299,8 @@ export class ScriptingSystem extends System {
                 local e = {
                     id = raw.id,
                     name = raw.name,
-                    _components = raw.components
+                    _components = raw.components,
+                    events = raw.events
                 }
                 return setmetatable(e, Entity)
             end
@@ -248,12 +348,11 @@ export class ScriptingSystem extends System {
             await this.lua.doString(firstScript.code);
         } catch (e) {
             console.error(
-                "Script compilation/execution error on node",
-                currentNode,
-                ":",
-                e,
+                `[Lua Compile Error on Node "${currentNode}"]`,
+                extractLuaError(e),
             );
             this.lua.global.close();
+
             return;
         }
 
@@ -328,7 +427,7 @@ export class ScriptingSystem extends System {
                 try {
                     await this.lua.doString(nextScript.code);
                 } catch (e) {
-                    console.error("Script error on node", currentNode, ":", e);
+                    console.error(`[Lua Compile Error on Node "${currentNode}"]`, extractLuaError(e));
                     this.lua.global.close();
                     this.running = false;
                     return;
@@ -355,10 +454,9 @@ export class ScriptingSystem extends System {
             if (result !== LuaReturn.Yield) {
                 let errorMsg = "Unknown error";
                 try {
-                    // Pull top of stack (-1) where Lua pushes error messages
                     const stackVal = mainThread.getStackValues(-1);
                     if (stackVal !== undefined && stackVal !== null) {
-                        errorMsg = String(stackVal);
+                        errorMsg = extractLuaError(stackVal);
                     }
                 } catch (e) {
                     errorMsg = `Could not inspect stack error: ${e}`;
@@ -395,6 +493,12 @@ export class ScriptingSystem extends System {
         requestAnimationFrame(step);
     }
 
+    emitToEntity(entityId: string, eventName: string, ...args: any[]): void {
+        if (!this.lua) return;
+        const fn = this.lua.global.get("__entityEmit");
+        if (fn) fn(entityId, eventName, ...args);
+    }
+
     update(_deltaTime: number, _entities: Entity[]): void {}
 
     cleanup(): void {
@@ -402,5 +506,9 @@ export class ScriptingSystem extends System {
         this.lua?.global.close();
         this.lua = null;
         this.entities = [];
+        if (this.onKeyDown) window.removeEventListener("keydown", this.onKeyDown);
+        if (this.onKeyUp) window.removeEventListener("keyup", this.onKeyUp);
+        this.keysPressed.clear();
+        this.inputManagerEvents.clear();
     }
 }
