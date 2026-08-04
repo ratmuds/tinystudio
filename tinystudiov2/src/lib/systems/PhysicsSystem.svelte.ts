@@ -233,8 +233,7 @@ export class PhysicsSystem extends System {
     }
 
     update(_deltaTime: number, entities: Entity[]): void {
-        this.joltInterface.Step(1.0 / 60.0, 1);
-
+        // Before stepping: sync dirty transforms → physics bodies (teleport)
         for (const entity of entities) {
             const bodyID = this.bodyByEntityId.get(entity.id);
             if (!bodyID) continue;
@@ -244,7 +243,59 @@ export class PhysicsSystem extends System {
             );
             if (!transformComp) continue;
 
-            // Read position FROM physics body
+            const posDirty = transformComp.data.position.dirty;
+            const rotDirty = transformComp.data.rotation.dirty;
+
+            if (!posDirty && !rotDirty) continue;
+
+            // Activate the body so Jolt accepts the teleport
+            this.bodyInterface.ActivateBody(bodyID);
+
+            if (posDirty) {
+                const pos = transformComp.data.position.value as {
+                    x: number;
+                    y: number;
+                    z: number;
+                };
+                this.bodyInterface.SetPosition(
+                    bodyID,
+                    new this.jolt.RVec3(pos.x, pos.y, pos.z),
+                    this.jolt.EActivation_Activate,
+                );
+                transformComp.data.position.dirty = false;
+            }
+
+            if (rotDirty) {
+                const rot = transformComp.data.rotation.value as {
+                    x: number;
+                    y: number;
+                    z: number;
+                };
+                const quat = new THREE.Quaternion().setFromEuler(
+                    new THREE.Euler(rot.x, rot.y, rot.z),
+                );
+                this.bodyInterface.SetRotation(
+                    bodyID,
+                    new this.jolt.Quat(quat.x, quat.y, quat.z, quat.w),
+                    this.jolt.EActivation_Activate,
+                );
+                transformComp.data.rotation.dirty = false;
+            }
+        }
+
+        // Step the simulation
+        this.joltInterface.Step(1.0 / 60.0, 1);
+
+        // After stepping: read back transforms FROM physics bodies
+        for (const entity of entities) {
+            const bodyID = this.bodyByEntityId.get(entity.id);
+            if (!bodyID) continue;
+
+            const transformComp = entity.components.find(
+                (c) => c.name === "Transform",
+            );
+            if (!transformComp) continue;
+
             const pos = this.bodyInterface.GetPosition(bodyID);
             transformComp.data.position.value = {
                 x: pos.GetX(),
@@ -253,7 +304,6 @@ export class PhysicsSystem extends System {
             };
             transformComp.data.position.dirty = true;
 
-            // Read rotation FROM physics body (convert quaternion to Euler)
             const rot = this.bodyInterface.GetRotation(bodyID);
             const quat = new THREE.Quaternion(
                 rot.GetX(),

@@ -23,13 +23,7 @@
     // @ts-ignore
     self.MonacoEnvironment = {
         getWorker(_workerId: string, _label: string) {
-            return new Worker(
-                new URL(
-                    "monaco-editor/esm/vs/editor/editor.worker?worker",
-                    import.meta.url,
-                ),
-                { name: "editor", type: "module" },
-            );
+            return new EditorWorker();
         },
     };
 

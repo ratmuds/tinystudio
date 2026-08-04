@@ -907,7 +907,10 @@
     <Resizable.Pane defaultSize={22} class="h-full overflow-hidden border-l">
         <div class="h-full overflow-y-auto p-5">
             <h2 class="text-xl font-bold text-foreground">Properties</h2>
-            <p class="mb-4 text-xs text-muted-foreground">Entity · Model</p>
+            <p class="text-xs text-muted-foreground">Entity · Model</p>
+            <p class="mb-4 text-xs text-muted-foreground">
+                {selectedPartIds.join(", ")}
+            </p>
 
             {#if selectedPartIds.length > 0}
                 <p

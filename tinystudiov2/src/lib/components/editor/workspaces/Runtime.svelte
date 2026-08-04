@@ -223,28 +223,35 @@
         runtimeEntities = flattenWorldForRuntime(worldData);
 
         // Create and register systems
-        const meshSystem = new MeshSystem(scene, runtimeData.gameData);
-        runtimeData.systems = [meshSystem];
-
-        const physicsSystem = new PhysicsSystem(scene, runtimeData.gameData);
-        runtimeData.systems.push(physicsSystem);
-
+        // Order: scripting (writes transforms) → physics (syncs bodies, steps sim) → mesh (reads transforms)
         const scriptingSystem = new ScriptingSystem(
             scene,
             runtimeData.gameData,
         );
-        runtimeData.systems.push(scriptingSystem);
+        runtimeData.systems = [scriptingSystem];
+
+        const physicsSystem = new PhysicsSystem(scene, runtimeData.gameData);
+        runtimeData.systems.push(physicsSystem);
+
+        const meshSystem = new MeshSystem(scene, runtimeData.gameData);
+        runtimeData.systems.push(meshSystem);
 
         // Setup systems (await async setups like PhysicsSystem)
         for (const system of runtimeData.systems) {
             await system.setup(runtimeEntities);
         }
 
+        // Kick off scripts for entities with Script components
+        for (const entity of runtimeEntities) {
+            const hasScript = entity.components.some((c) => c.name === "Script");
+            if (hasScript) {
+                scriptingSystem.startScript(entity);
+            }
+        }
+
         // Start game loop
         lastTime = performance.now();
         animationId = requestAnimationFrame(gameLoop);
-
-        console.log("Runtime started with systems:", runtimeData.systems);
     }
 
     function stopRuntime() {

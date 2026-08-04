@@ -1,13 +1,16 @@
 import * as THREE from "three";
 import { System, type Entity } from "$lib/stores/ecs.svelte";
 import type { GameData } from "$lib/stores/data.svelte";
-import { LuaFactory, LuaReturn, type LuaThread } from "wasmoon";
+import { LuaFactory, LuaReturn, type LuaEngine, type LuaThread } from "wasmoon";
+
 const factory = new LuaFactory();
 
 export class ScriptingSystem extends System {
     private scene: THREE.Scene | null = null;
     private gameData: GameData | null = null;
+    private entities: Entity[] = [];
     private running = false;
+    private lua: LuaEngine | null = null;
 
     constructor(scene: THREE.Scene, gameData: GameData) {
         super();
@@ -21,338 +24,383 @@ export class ScriptingSystem extends System {
 
     async setup(entities: Entity[]): Promise<void> {
         if (!this.scene || !this.gameData) return;
-
+        this.entities = entities;
         this.running = true;
-
-        let lua = await factory.createEngine();
-
-        for (const entity of entities) {
-            let scriptComp = entity.components.find((c) => c.name === "Script");
-            if (!scriptComp) continue;
-
-            console.log(
-                "Executing script for entity",
-                entity.id,
-                "in ScriptingSystem",
-            );
-
-            let scriptId = scriptComp.data.scriptId.value as string;
-            let scriptData = this.gameData.scripts.find(
-                (s) => s.id === scriptId,
-            );
-            if (!scriptData) {
-                console.warn("Script data not found for entity", entity.id);
-                continue;
-            } else {
-                console.log("Found script data for entity", entity.id);
-                console.log("id:", scriptData.id);
-                console.log("name:", scriptData.name);
-                console.log("scriptData:", scriptData.scriptData);
-                console.log(
-                    "first block code:",
-                    scriptData.scriptData[0]?.code,
-                );
-                console.log("full scriptData:", scriptData.stateData);
-            }
-
-            console.log(
-                "first, step the state machine to go to the first node",
-            );
-            /*
-            {
-  "nodes": [
-    {
-      "id": "start",
-      "type": "terminal",
-      "position": {
-        "x": 150,
-        "y": 0
-      },
-      "data": {
-        "kind": "start"
-      }
-    },
-    {
-      "id": "end",
-      "type": "terminal",
-      "position": {
-        "x": 150,
-        "y": 300
-      },
-      "data": {
-        "kind": "end"
-      }
-    },
-    {
-      "id": "node-97fdb3e4",
-      "type": "stateMachine",
-      "position": {
-        "x": 197.57264445406702,
-        "y": 80.99885305461089
-      },
-      "data": {
-        "text": "",
-        "handles": [
-          {
-            "id": "74910258",
-            "label": "Out"
-          }
-        ],
-        "script": "uihihuhiu"
-      }
     }
-  ],
-  "edges": [
-    {
-      "id": "xy-edge__start-node-97fdb3e4",
-      "source": "start",
-      "target": "node-97fdb3e4"
-    },
-    {
-      "id": "xy-edge__node-97fdb3e474910258-end",
-      "source": "node-97fdb3e4",
-      "sourceHandle": "74910258",
-      "target": "end"
+
+    private async createLua(): Promise<LuaEngine> {
+        const lua = await factory.createEngine();
+        this.registerGlobals(lua);
+        return lua;
     }
-  ]
-}*/
 
-            let currentNode = "start";
-            let changeState: undefined | string = undefined;
+    private registerGlobals(lua: LuaEngine): void {
+        // 1. Vector3 Metatable
+        lua.doStringSync(`
+            Vector3 = {}
+            Vector3.__index = Vector3
 
-            let foundEdge = scriptData.stateData.edges.find(
-                (e: any) => e.source === currentNode,
-            );
-            let nextNodeId = foundEdge?.target;
-            if (nextNodeId) {
-                console.log("Found next node id:", nextNodeId);
-                currentNode = nextNodeId;
+            function Vector3.new(x, y, z)
+                return setmetatable({ x = x or 0, y = y or 0, z = z or 0 }, Vector3)
+            end
 
-                if (nextNodeId === "end") {
-                    console.log("Reached end node, stopping execution");
-                    this.running = false;
-                    lua.global.close();
-                    return;
-                }
-            }
+            function Vector3:__tostring()
+                return string.format("Vector3(%.4f, %.4f, %.4f)", self.x, self.y, self.z)
+            end
 
-            // find script attached to the current node
-            let currentNodeData = scriptData.stateData.nodes.find(
-                (n: any) => n.id === currentNode,
-            );
-            let currentScript = scriptData.scriptData.find(
-                (s) => s.name === currentNodeData.data.script,
-            );
+            function Vector3.__add(a, b)
+                return Vector3.new(a.x + b.x, a.y + b.y, a.z + b.z)
+            end
 
-            if (!currentScript) {
-                console.warn("No script found for current node:", currentNode);
-                this.running = false;
-                lua.global.close();
-                return;
-            } else {
-                console.log("Found script for current node:", currentNode);
-                console.log("script code:", currentScript.code);
-            }
+            function Vector3.__sub(a, b)
+                return Vector3.new(a.x - b.x, a.y - b.y, a.z - b.z)
+            end
 
-            try {
-                await lua.doString(currentScript.code);
-            } catch (e) {
-                console.error(
-                    "Failed to execute script for node:",
-                    currentNode,
-                    "Error:",
-                    e,
+            function Vector3.__mul(a, b)
+                if type(a) == "number" then
+                    return Vector3.new(b.x * a, b.y * a, b.z * a)
+                elseif type(b) == "number" then
+                    return Vector3.new(a.x * b, a.y * b, a.z * b)
+                end
+                return Vector3.new(a.x * b.x, a.y * b.y, a.z * b.z)
+            end
+
+            function Vector3:length()
+                return math.sqrt(self.x * self.x + self.y * self.y + self.z * self.z)
+            end
+
+            function Vector3:normalized()
+                local len = self:length()
+                if len == 0 then return Vector3.new(0, 0, 0) end
+                return Vector3.new(self.x / len, self.y / len, self.z / len)
+            end
+
+            function Vector3:dot(other)
+                return self.x * other.x + self.y * other.y + self.z * other.z
+            end
+
+            function Vector3:cross(other)
+                return Vector3.new(
+                    self.y * other.z - self.z * other.y,
+                    self.z * other.x - self.x * other.z,
+                    self.x * other.y - self.y * other.x
+                )
+            end
+        `);
+
+        // 2. Entity, component, and component-data metatables
+        lua.global.set(
+            "__warnUnsupportedComponentData",
+            (componentName: string, key: string, type: string) => {
+                console.warn(
+                    `Lua component data "${componentName}.${key}" uses unsupported type "${type}". ` +
+                        "Only string and vector3 are currently supported.",
                 );
-                lua.global.close();
-                return;
-            }
+            },
+        );
 
-            let mainThread: LuaThread = lua.global.get("mainThread");
+        lua.doStringSync(`
+            Entity = {}
+            Component = {}
 
-            lua.global.set("changeState", (newState: string) => {
-                changeState = newState;
-            });
+            function Entity:_findComponent(name)
+                if not self._components then return nil end
+                local len = self._components.length or #self._components
+                for i = 0, len - 1 do
+                    local comp = self._components[i]
+                    if comp and comp.name == name then
+                        return comp
+                    end
+                end
+                return nil
+            end
 
-            const step = async () => {
-                if (!this.running) {
-                    console.log("Play test stopped, closing Lua engine");
-                    lua.global.close();
-                    return;
+            function Component:__index(key)
+                local comp = rawget(self, "_component")
+                local entry = comp.data[key]
+                if not entry then return nil end
+
+                if entry.type == "string" then
+                    return entry.value
+                elseif entry.type == "vector3" then
+                    local value = entry.value
+                    return Vector3.new(value.x, value.y, value.z)
+                else
+                    __warnUnsupportedComponentData(comp.name, key, entry.type)
+                    return nil
+                end
+            end
+
+            function Component:__newindex(key, value)
+                local comp = rawget(self, "_component")
+                local entry = comp.data[key]
+                if not entry then
+                    rawset(self, key, value)
+                    return
+                end
+
+                if entry.type == "string" then
+                    if type(value) ~= "string" then return end
+                    entry.value = value
+                    entry.dirty = true
+                elseif entry.type == "vector3" then
+                    if not value then return end
+                    entry.value = {
+                        x = value.x or 0,
+                        y = value.y or 0,
+                        z = value.z or 0
+                    }
+                    entry.dirty = true
+                else
+                    __warnUnsupportedComponentData(comp.name, key, entry.type)
+                end
+            end
+
+            function Entity:__index(key)
+                local method = rawget(Entity, key)
+                if method then return method end
+
+                local component = self:_findComponent(key:gsub("^%l", string.upper))
+                if component then
+                    return setmetatable({ _component = component }, Component)
+                end
+                return nil
+            end
+
+            function Entity:__newindex(key, value)
+                rawset(self, key, value)
+            end
+        `);
+
+        // 3. JS Data Fetching Helpers (pure functions, no Lua re-entry)
+        lua.global.set("__findEntityByIdJS", (id: string) => {
+            return this.entities.find((e) => e.id === id) ?? false;
+        });
+
+        lua.global.set("__findEntityByNameJS", (name: string) => {
+            return this.entities.find((e) => e.name === name) ?? false;
+        });
+
+        // 4. Native Lua constructors for Entities (attaches Entity metatable directly in Lua)
+        lua.doStringSync(`
+            function getEntityById(id)
+                local raw = __findEntityByIdJS(id)
+                if not raw then return nil end
+                local e = {
+                    id = raw.id,
+                    name = raw.name,
+                    _components = raw.components
                 }
+                return setmetatable(e, Entity)
+            end
 
-                if (changeState) {
-                    const targetHandleLabel = changeState;
-                    console.log(
-                        "Changing state to the output named:",
-                        targetHandleLabel,
-                    );
-                    changeState = undefined;
-
-                    console.log(
-                        "Closing current Lua engine and creating a new one for the new state",
-                    );
-                    lua.global.close();
-
-                    console.log(
-                        "finding new node in state machine:",
-                        currentNode,
-                    );
-                    // this one is more complicated because we need to find the edge that has the current node, as well as the correct output handle
-                    let foundHandle = currentNodeData.data.handles.find(
-                        (h: any) => h.label === targetHandleLabel,
-                    );
-                    if (!foundHandle) {
-                        console.warn(
-                            "No handle found for output named:",
-                            targetHandleLabel,
-                        );
-                        this.running = false;
-                        return;
-                    }
-                    let foundEdge = scriptData.stateData.edges.find(
-                        (e: any) =>
-                            e.source === currentNode &&
-                            e.sourceHandle === foundHandle.id,
-                    );
-                    console.log(scriptData.stateData.edges);
-                    if (!foundEdge) {
-                        console.warn(
-                            "No edge found for output named:",
-                            targetHandleLabel,
-                        );
-                        this.running = false;
-                        return;
-                    }
-
-                    let nextNodeId = foundEdge.target;
-                    currentNode = nextNodeId;
-
-                    if (nextNodeId === "end") {
-                        console.log("Reached end node, stopping execution");
-                        alert(
-                            "Reached end node, stopping execution!!!!!!!!!!!!!!!!!!",
-                        );
-                        this.running = false;
-                        lua.global.close();
-                        return;
-                    }
-
-                    let nextNodeData = scriptData.stateData.nodes.find(
-                        (n: any) => n.id === nextNodeId,
-                    );
-
-                    if (!nextNodeData) {
-                        console.warn(
-                            "No node found for next node id:",
-                            nextNodeId,
-                        );
-                        this.running = false;
-                        return;
-                    }
-
-                    currentNodeData = nextNodeData;
-
-                    let nextScript = scriptData.scriptData.find(
-                        (s) => s.name === nextNodeData.data.script,
-                    );
-                    if (!nextScript) {
-                        console.warn(
-                            "No script found for next node id:",
-                            nextNodeId,
-                        );
-                        this.running = false;
-                        return;
-                    }
-
-                    lua = await factory.createEngine();
-                    lua.global.set("changeState", (newState: string) => {
-                        changeState = newState;
-                    });
-                    try {
-                        await lua.doString(nextScript.code);
-                    } catch (e) {
-                        console.error(
-                            "Failed to execute script for node:",
-                            nextNodeId,
-                            "Error:",
-                            e,
-                        );
-                        lua.global.close();
-                        this.running = false;
-                        return;
-                    }
-
-                    mainThread = lua.global.get("mainThread");
-
-                    requestAnimationFrame(step);
-                    return;
+            function getEntityByName(name)
+                local raw = __findEntityByNameJS(name)
+                if not raw then return nil end
+                local e = {
+                    id = raw.id,
+                    name = raw.name,
+                    _components = raw.components
                 }
+                return setmetatable(e, Entity)
+            end
+        `);
+    }
 
-                const { result, resultCount } = mainThread.resume();
+    async startScript(entity: Entity): Promise<void> {
+        if (!this.gameData) return;
 
-                if (result === LuaReturn.Ok) {
-                    // Coroutine completed normally (no more yields)
-                    console.log("Coroutine completed");
+        const scriptComp = entity.components.find((c) => c.name === "Script");
+        if (!scriptComp) return;
 
-                    // check if there is a change state request
-
-                    if (changeState) {
-                        console.warn(
-                            "I JUST REALIZED THAT I NEED TO HANDLE CHANGE STATE HERE TOO",
-                        );
-                        console.warn("OK LOOP WILL RUN AGAIN TO HANDLE IT BYE");
-                        // we will refire the step function to handle the state change
-                        requestAnimationFrame(step);
-                        return;
-                    }
-
-                    lua.global.close();
-                    return;
-                }
-
-                if (result !== LuaReturn.Yield) {
-                    const [errorMsg] = mainThread.getStackValues(0);
-                    console.error(
-                        "Game loop crashed with result code:",
-                        result,
-                        "Error:",
-                        errorMsg || "Unknown error",
-                    );
-                    mainThread.pop(resultCount);
-                    lua.global.close();
-                    return;
-                }
-
-                let waitSeconds = 0;
-                if (resultCount > 0) {
-                    const [first] = mainThread.getStackValues(0);
-                    if (typeof first === "number") {
-                        waitSeconds = first;
-                    }
-                    mainThread.pop(resultCount);
-                }
-
-                if (!this.running) {
-                    console.log("Play test stopped, closing Lua engine");
-
-                    lua.global.close();
-                    return;
-                }
-
-                if (waitSeconds > 0) {
-                    setTimeout(step, waitSeconds * 1000);
-                } else {
-                    requestAnimationFrame(step);
-                }
-            };
-
-            requestAnimationFrame(step);
+        const scriptId = scriptComp.data.scriptId.value as string;
+        const scriptData = this.gameData.scripts.find((s) => s.id === scriptId);
+        if (!scriptData) {
+            console.warn("Script data not found for entity", entity.id);
+            return;
         }
+
+        let currentNode = "start";
+
+        const startEdge = scriptData.stateData.edges.find(
+            (e: any) => e.source === currentNode,
+        );
+        if (!startEdge) return;
+
+        currentNode = startEdge.target;
+        if (currentNode === "end") return;
+
+        const firstNodeData = scriptData.stateData.nodes.find(
+            (n: any) => n.id === currentNode,
+        );
+        if (!firstNodeData) return;
+
+        const firstScript = scriptData.scriptData.find(
+            (s) => s.name === firstNodeData.data.script,
+        );
+        if (!firstScript) return;
+
+        this.lua = await this.createLua();
+
+        let currentNodeData = firstNodeData;
+
+        try {
+            await this.lua.doString(firstScript.code);
+        } catch (e) {
+            console.error(
+                "Script compilation/execution error on node",
+                currentNode,
+                ":",
+                e,
+            );
+            this.lua.global.close();
+            return;
+        }
+
+        let mainThread: LuaThread = this.lua.global.get("mainThread");
+        let changeState: string | undefined;
+
+        this.lua.global.set("changeState", (newState: string) => {
+            changeState = newState;
+        });
+
+        const step = async () => {
+            if (!this.running) {
+                this.lua?.global.close();
+                return;
+            }
+
+            if (changeState) {
+                const targetLabel = changeState;
+                changeState = undefined;
+
+                const handle = currentNodeData.data.handles?.find(
+                    (h: any) => h.label === targetLabel,
+                );
+                if (!handle) {
+                    console.warn("No handle found for output:", targetLabel);
+                    this.running = false;
+                    return;
+                }
+
+                const edge = scriptData.stateData.edges.find(
+                    (e: any) =>
+                        e.source === currentNode &&
+                        e.sourceHandle === handle.id,
+                );
+                if (!edge) {
+                    console.warn("No edge found for output:", targetLabel);
+                    this.running = false;
+                    return;
+                }
+
+                currentNode = edge.target;
+                if (currentNode === "end") {
+                    this.running = false;
+                    this.lua?.global.close();
+                    return;
+                }
+
+                const nextNodeData = scriptData.stateData.nodes.find(
+                    (n: any) => n.id === currentNode,
+                );
+                if (!nextNodeData) {
+                    console.warn("No node data for:", currentNode);
+                    this.running = false;
+                    return;
+                }
+
+                const nextScript = scriptData.scriptData.find(
+                    (s) => s.name === nextNodeData.data.script,
+                );
+                if (!nextScript) {
+                    console.warn("No script for node:", currentNode);
+                    this.running = false;
+                    return;
+                }
+
+                currentNodeData = nextNodeData;
+                this.lua = await this.createLua();
+                this.lua.global.set("changeState", (newState: string) => {
+                    changeState = newState;
+                });
+
+                try {
+                    await this.lua.doString(nextScript.code);
+                } catch (e) {
+                    console.error("Script error on node", currentNode, ":", e);
+                    this.lua.global.close();
+                    this.running = false;
+                    return;
+                }
+
+                mainThread = this.lua.global.get("mainThread");
+                requestAnimationFrame(step);
+                return;
+            }
+
+            // Resume coroutine
+            const { result, resultCount } = mainThread.resume();
+
+            if (result === LuaReturn.Ok) {
+                if (changeState) {
+                    requestAnimationFrame(step);
+                    return;
+                }
+                this.lua?.global.close();
+                return;
+            }
+
+            // Improved Error Catching logic
+            if (result !== LuaReturn.Yield) {
+                let errorMsg = "Unknown error";
+                try {
+                    // Pull top of stack (-1) where Lua pushes error messages
+                    const stackVal = mainThread.getStackValues(-1);
+                    if (stackVal !== undefined && stackVal !== null) {
+                        errorMsg = String(stackVal);
+                    }
+                } catch (e) {
+                    errorMsg = `Could not inspect stack error: ${e}`;
+                }
+
+                console.error(
+                    `[Lua Runtime Error on Node "${currentNode}"]`,
+                    errorMsg,
+                );
+                mainThread.pop(resultCount);
+                this.lua?.global.close();
+                return;
+            }
+
+            let waitSeconds = 0;
+            if (resultCount > 0) {
+                const [first] = mainThread.getStackValues(0);
+                if (typeof first === "number") waitSeconds = first;
+                mainThread.pop(resultCount);
+            }
+
+            if (!this.running) {
+                this.lua?.global.close();
+                return;
+            }
+
+            if (waitSeconds > 0) {
+                setTimeout(step, waitSeconds * 1000);
+            } else {
+                requestAnimationFrame(step);
+            }
+        };
+
+        requestAnimationFrame(step);
     }
 
-    update(_deltaTime: number, entities: Entity[]): void {}
+    update(_deltaTime: number, _entities: Entity[]): void {}
 
     cleanup(): void {
         this.running = false;
+        this.lua?.global.close();
+        this.lua = null;
+        this.entities = [];
     }
 }
