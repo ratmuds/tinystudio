@@ -2,7 +2,9 @@ import * as THREE from "three";
 import { System, type Entity } from "$lib/stores/ecs.svelte";
 import type { GameData } from "$lib/stores/data.svelte";
 import { EventEmitter } from "$lib/stores/EventEmitter";
-import { LuaFactory, LuaReturn, type LuaEngine, type LuaThread } from "wasmoon";
+import { LuaFactory, type LuaEngine, type LuaThread } from "wasmoon";
+import { StateScope, SchedulerJob } from "./ScriptScheduler";
+import { runtimeMetrics } from "$lib/stores/runtimeMetrics.svelte";
 
 const factory = new LuaFactory();
 
@@ -11,7 +13,9 @@ function extractLuaError(raw: unknown): string {
     // wasmoon embeds JS source code when callbacks throw; pull out the actual error
     const lines = str.split("\n");
     for (const line of lines) {
-        const match = line.match(/(TypeError|Error|ReferenceError|RangeError):.+/);
+        const match = line.match(
+            /(TypeError|Error|ReferenceError|RangeError):.+/,
+        );
         if (match) return match[0].trim();
     }
     for (let i = lines.length - 1; i >= 0; i--) {
@@ -30,6 +34,7 @@ export class ScriptingSystem extends System {
     private inputManagerEvents = new EventEmitter();
     private onKeyDown: ((e: KeyboardEvent) => void) | null = null;
     private onKeyUp: ((e: KeyboardEvent) => void) | null = null;
+    private currentScope: StateScope | null = null;
 
     constructor(scene: THREE.Scene, gameData: GameData) {
         super();
@@ -62,6 +67,33 @@ export class ScriptingSystem extends System {
         const lua = await factory.createEngine();
         this.registerGlobals(lua);
         return lua;
+    }
+
+    private dispatchCallback(
+        scope: StateScope,
+        callbackId: string,
+        args: any[],
+        name: string,
+    ): void {
+        const dispatch = scope.lua.global.get("__dispatchEventCallback") as
+            | ((id: string) => LuaThread | null)
+            | undefined;
+        if (!dispatch) return;
+
+        const thread = dispatch(callbackId);
+        if (!thread) return;
+
+        scope.pendingJobs.push(
+            new SchedulerJob(
+                crypto.randomUUID(),
+                thread,
+                0,
+                "queued",
+                "callback",
+                args,
+                name,
+            ),
+        );
     }
 
     private registerGlobals(lua: LuaEngine): void {
@@ -132,6 +164,34 @@ export class ScriptingSystem extends System {
         lua.doStringSync(`
             Entity = {}
             Component = {}
+            __eventCallbacks = {}
+            __nextEventCallbackId = 0
+
+            function __registerEventCallback(callback)
+                __nextEventCallbackId = __nextEventCallbackId + 1
+                local id = tostring(__nextEventCallbackId)
+                __eventCallbacks[id] = callback
+                return id
+            end
+
+            function __dispatchEventCallback(id, ...)
+                local callback = __eventCallbacks[id]
+                if not callback then return nil end
+
+                return coroutine.create(function(...)
+                    local count = select("#", ...)
+                    local converted = {}
+                    for i = 1, count do
+                        local value = select(i, ...)
+                        if (type(value) == "table" or type(value) == "userdata") and value.id then
+                            local wrapped = getEntityById(value.id)
+                            if wrapped then value = wrapped end
+                        end
+                        converted[i] = value
+                    end
+                    callback(table.unpack(converted, 1, count))
+                end)
+            end
 
             function Entity:_findComponent(name)
                 if not self._components then return nil end
@@ -202,11 +262,12 @@ export class ScriptingSystem extends System {
             end
 
             function Entity:on(eventName, callback)
-                __entityOn(self.id, eventName, callback)
+                local callbackId = __registerEventCallback(callback)
+                return __entityOn(self.id, eventName, callbackId)
             end
 
-            function Entity:off(eventName, callback)
-                __entityOff(self.id, eventName, callback)
+            function Entity:off(listenerId)
+                __entityOff(self.id, listenerId)
             end
 
             function Entity:emit(eventName, ...)
@@ -219,10 +280,11 @@ export class ScriptingSystem extends System {
                         return __isKeyPressedJS(keyCode)
                     end,
                     on = function(self, eventName, callback)
-                        __inputManagerOn(eventName, callback)
+                        local callbackId = __registerEventCallback(callback)
+                        return __inputManagerOn(eventName, callbackId)
                     end,
-                    off = function(self, eventName, callback)
-                        __inputManagerOff(eventName, callback)
+                    off = function(self, listenerId)
+                        __inputManagerOff(listenerId)
                     end
                 }
             }
@@ -243,33 +305,79 @@ export class ScriptingSystem extends System {
 
         lua.global.set(
             "__inputManagerOn",
-            (eventName: string, cb: Function) => {
-                this.inputManagerEvents.on(eventName, cb);
+            (eventName: string, callbackId: string) => {
+                const scope = this.currentScope;
+                if (!scope) return undefined;
+
+                const dispatch = (...args: any[]) => {
+                    this.dispatchCallback(
+                        scope,
+                        callbackId,
+                        args,
+                        `inputManager.${eventName}`,
+                    );
+                };
+                const listenerId = this.inputManagerEvents.on(
+                    eventName,
+                    dispatch,
+                    scope,
+                );
+                scope.registrations.push({
+                    emitter: this.inputManagerEvents,
+                    listenerId,
+                });
+                return listenerId;
             },
         );
 
-        lua.global.set(
-            "__inputManagerOff",
-            (eventName: string, cb: Function) => {
-                this.inputManagerEvents.off(eventName, cb);
-            },
-        );
+        lua.global.set("__inputManagerOff", (id: string) => {
+            const scope = this.currentScope;
+            if (scope) {
+                scope.removeRegistration(id);
+            } else {
+                this.inputManagerEvents.off(id);
+            }
+        });
 
         lua.global.set(
             "__entityOn",
-            (entityId: string, eventName: string, cb: Function) => {
+            (entityId: string, eventName: string, callbackId: string) => {
+                const scope = this.currentScope;
+                if (!scope) return undefined;
+
                 const entity = this.entities.find((e) => e.id === entityId);
-                if (entity) entity.events.on(eventName, cb);
+                if (!entity) return undefined;
+
+                const dispatch = (...args: any[]) => {
+                    this.dispatchCallback(
+                        scope,
+                        callbackId,
+                        args,
+                        `${entity.name}.${eventName}`,
+                    );
+                };
+                const listenerId = entity.events.on(
+                    eventName,
+                    dispatch,
+                    scope,
+                );
+                scope.registrations.push({
+                    emitter: entity.events,
+                    listenerId,
+                });
+                return listenerId;
             },
         );
 
-        lua.global.set(
-            "__entityOff",
-            (entityId: string, eventName: string, cb: Function) => {
+        lua.global.set("__entityOff", (entityId: string, id: string) => {
+            const scope = this.currentScope;
+            if (scope) {
+                scope.removeRegistration(id);
+            } else {
                 const entity = this.entities.find((e) => e.id === entityId);
-                if (entity) entity.events.off(eventName, cb);
-            },
-        );
+                if (entity) entity.events.off(id);
+            }
+        });
 
         lua.global.set(
             "__entityEmit",
@@ -344,150 +452,73 @@ export class ScriptingSystem extends System {
 
         let currentNodeData = firstNodeData;
 
+        let stateScope = new StateScope(this.lua, entity.id, entity.name);
+        this.currentScope = stateScope;
+        let wrappedCode = `local mainThread = coroutine.create(function()
+            ${firstScript.code}
+        end)
+        return mainThread`;
+
+        // Run the script once first, to get the mainThread and initial setup
+
+        let thread: LuaThread;
+
         try {
-            await this.lua.doString(firstScript.code);
+            thread = await this.lua.doString(wrappedCode);
         } catch (e) {
             console.error(
                 `[Lua Compile Error on Node "${currentNode}"]`,
                 extractLuaError(e),
             );
             this.lua.global.close();
-
             return;
         }
 
-        let mainThread: LuaThread = this.lua.global.get("mainThread");
-        let changeState: string | undefined;
-
-        this.lua.global.set("changeState", (newState: string) => {
-            changeState = newState;
-        });
+        let mainThread: LuaThread = thread; // this.lua.global.get("mainThread");
+        let schedulerJob: SchedulerJob = new SchedulerJob(
+            crypto.randomUUID(),
+            mainThread,
+            0,
+            "alive",
+            "script",
+            [],
+        );
+        stateScope.addJob(schedulerJob);
 
         const step = async () => {
             if (!this.running) {
+                stateScope.clearRegistrations();
                 this.lua?.global.close();
+                runtimeMetrics.removeScope(entity.id);
+                if (this.currentScope === stateScope) this.currentScope = null;
                 return;
             }
 
-            if (changeState) {
-                const targetLabel = changeState;
-                changeState = undefined;
+            stateScope.step();
 
-                const handle = currentNodeData.data.handles?.find(
-                    (h: any) => h.label === targetLabel,
-                );
-                if (!handle) {
-                    console.warn("No handle found for output:", targetLabel);
-                    this.running = false;
-                    return;
-                }
+            // Report metrics every tick
+            runtimeMetrics.updateScope(
+                entity.id,
+                entity.name,
+                stateScope.getMetrics(),
+                stateScope.primaryDead,
+            );
+            runtimeMetrics.recordLoad();
 
-                const edge = scriptData.stateData.edges.find(
-                    (e: any) =>
-                        e.source === currentNode &&
-                        e.sourceHandle === handle.id,
-                );
-                if (!edge) {
-                    console.warn("No edge found for output:", targetLabel);
-                    this.running = false;
-                    return;
-                }
-
-                currentNode = edge.target;
-                if (currentNode === "end") {
-                    this.running = false;
-                    this.lua?.global.close();
-                    return;
-                }
-
-                const nextNodeData = scriptData.stateData.nodes.find(
-                    (n: any) => n.id === currentNode,
-                );
-                if (!nextNodeData) {
-                    console.warn("No node data for:", currentNode);
-                    this.running = false;
-                    return;
-                }
-
-                const nextScript = scriptData.scriptData.find(
-                    (s) => s.name === nextNodeData.data.script,
-                );
-                if (!nextScript) {
-                    console.warn("No script for node:", currentNode);
-                    this.running = false;
-                    return;
-                }
-
-                currentNodeData = nextNodeData;
-                this.lua = await this.createLua();
-                this.lua.global.set("changeState", (newState: string) => {
-                    changeState = newState;
-                });
-
-                try {
-                    await this.lua.doString(nextScript.code);
-                } catch (e) {
-                    console.error(`[Lua Compile Error on Node "${currentNode}"]`, extractLuaError(e));
-                    this.lua.global.close();
-                    this.running = false;
-                    return;
-                }
-
-                mainThread = this.lua.global.get("mainThread");
-                requestAnimationFrame(step);
-                return;
-            }
-
-            // Resume coroutine
-            const { result, resultCount } = mainThread.resume();
-
-            if (result === LuaReturn.Ok) {
-                if (changeState) {
-                    requestAnimationFrame(step);
-                    return;
-                }
+            if (
+                stateScope.primaryDead &&
+                stateScope.pendingJobs.length === 0 &&
+                stateScope.pendingDispatches.length === 0 &&
+                stateScope.jobs.every((j) => j.state === "dead")
+            ) {
+                stateScope.clearRegistrations();
                 this.lua?.global.close();
+                runtimeMetrics.removeScope(entity.id);
+                if (this.currentScope === stateScope) this.currentScope = null;
                 return;
             }
 
-            // Improved Error Catching logic
-            if (result !== LuaReturn.Yield) {
-                let errorMsg = "Unknown error";
-                try {
-                    const stackVal = mainThread.getStackValues(-1);
-                    if (stackVal !== undefined && stackVal !== null) {
-                        errorMsg = extractLuaError(stackVal);
-                    }
-                } catch (e) {
-                    errorMsg = `Could not inspect stack error: ${e}`;
-                }
-
-                console.error(
-                    `[Lua Runtime Error on Node "${currentNode}"]`,
-                    errorMsg,
-                );
-                mainThread.pop(resultCount);
-                this.lua?.global.close();
-                return;
-            }
-
-            let waitSeconds = 0;
-            if (resultCount > 0) {
-                const [first] = mainThread.getStackValues(0);
-                if (typeof first === "number") waitSeconds = first;
-                mainThread.pop(resultCount);
-            }
-
-            if (!this.running) {
-                this.lua?.global.close();
-                return;
-            }
-
-            if (waitSeconds > 0) {
-                setTimeout(step, waitSeconds * 1000);
-            } else {
-                requestAnimationFrame(step);
-            }
+            requestAnimationFrame(step);
         };
 
         requestAnimationFrame(step);
@@ -503,12 +534,18 @@ export class ScriptingSystem extends System {
 
     cleanup(): void {
         this.running = false;
+        if (this.currentScope) {
+            this.currentScope.clearRegistrations();
+            this.currentScope = null;
+        }
         this.lua?.global.close();
         this.lua = null;
         this.entities = [];
-        if (this.onKeyDown) window.removeEventListener("keydown", this.onKeyDown);
+        if (this.onKeyDown)
+            window.removeEventListener("keydown", this.onKeyDown);
         if (this.onKeyUp) window.removeEventListener("keyup", this.onKeyUp);
         this.keysPressed.clear();
         this.inputManagerEvents.clear();
+        runtimeMetrics.clear();
     }
 }

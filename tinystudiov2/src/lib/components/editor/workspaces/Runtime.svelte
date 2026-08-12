@@ -2,6 +2,7 @@
     import * as THREE from "three";
     import Renderer from "$lib/components/editor/Renderer.svelte";
     import { Play, Square } from "@lucide/svelte";
+    import SchedulerPanel from "$lib/components/editor/SchedulerPanel.svelte";
 
     import { untrack } from "svelte";
     import { RuntimeData, WorldData } from "$lib/stores/data.svelte";
@@ -324,6 +325,8 @@
                 Play
             {/if}
         </button>
+
+        <SchedulerPanel />
 
         {#if worldData}
             <span class="text-xs text-muted-foreground">
