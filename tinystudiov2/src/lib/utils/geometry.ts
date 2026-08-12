@@ -2,13 +2,34 @@ import * as THREE from "three";
 
 export type Vec3 = { x: number; y: number; z: number };
 
+export type CustomGeometry = { positions: number[]; index: number[] | null };
+
 /**
  * Creates a Three.js BufferGeometry based on the geometry type and size.
  * @param geomType - The type of geometry ("sphere", "cylinder", or "box")
  * @param size - The dimensions of the geometry
+ * @param customGeometry - Optional serialized geometry (positions + index). When
+ *   present it overrides the primitive geometry types entirely (used for CSG results).
  * @returns A Three.js BufferGeometry instance
  */
-export function createGeometry(geomType: string, size: Vec3): THREE.BufferGeometry {
+export function createGeometry(
+    geomType: string,
+    size: Vec3,
+    customGeometry?: CustomGeometry | null,
+): THREE.BufferGeometry {
+    if (customGeometry && customGeometry.positions.length > 0) {
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute(
+            "position",
+            new THREE.Float32BufferAttribute(customGeometry.positions, 3),
+        );
+        if (customGeometry.index && customGeometry.index.length > 0) {
+            geometry.setIndex(customGeometry.index);
+        }
+        geometry.computeVertexNormals();
+        return geometry;
+    }
+
     switch (geomType) {
         case "sphere":
             return new THREE.SphereGeometry(size.x / 2);

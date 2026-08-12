@@ -100,8 +100,9 @@
             const geomType = meshComp.data.geometryType.value as string;
             const size = meshComp.data.size.value as Vec3;
             const color = meshComp.data.color.value as number;
+            const customGeometry = meshComp.data.customGeometry?.value ?? null;
 
-            const geometry = createGeometry(geomType, size);
+            const geometry = createGeometry(geomType, size, customGeometry);
             const mesh = createMesh(geometry, color, entity.id);
 
             const partPos = partTransform.data.position.value as Vec3;

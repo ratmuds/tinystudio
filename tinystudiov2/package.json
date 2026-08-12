@@ -38,6 +38,7 @@
     "@lucide/svelte": "^1.17.0",
     "@xyflow/svelte": "^1.6.2",
     "jolt-physics": "^1.1.0",
+    "manifold-3d": "^3.5.1",
     "mode-watcher": "^0.5.0",
     "monaco-editor": "^0.56.0",
     "three": "^0.172.0",

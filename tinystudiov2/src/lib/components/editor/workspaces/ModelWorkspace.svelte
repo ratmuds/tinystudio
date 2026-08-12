@@ -44,6 +44,7 @@
     import { onMount } from "svelte";
     import { generateObjectPreview } from "$lib/threeThumbnailGen";
     import { createGeometry, createMesh, type Vec3 } from "$lib/utils/geometry";
+    import { performCSG, type CSGOperation } from "$lib/utils/csg";
     import ComponentPropertiesPanel from "$lib/components/editor/sidebar/ComponentPropertiesPanel.svelte";
 
     let {
@@ -82,8 +83,9 @@
         const geomType = meshComp.data.geometryType.value as string;
         const size = (meshComp.data.size?.value ?? { x: 1, y: 1, z: 1 }) as Vec3;
         const color = meshComp.data.color.value as number;
+        const customGeometry = meshComp.data.customGeometry?.value ?? null;
 
-        const geometry = createGeometry(geomType, size);
+        const geometry = createGeometry(geomType, size, customGeometry);
         const mesh = createMesh(geometry, color, entity.id);
 
         const pos = transformComp.data.position.value as Vec3;
@@ -91,6 +93,8 @@
         mesh.userData.partId = entity.id;
         mesh.userData.geometryType = geomType;
         mesh.userData.size = { ...size };
+        mesh.userData.customGeometrySig =
+            customGeometry?.positions?.length ?? undefined;
         scene.add(mesh);
         meshByEntityId.set(entity.id, mesh);
         return mesh;
@@ -100,12 +104,15 @@
     function rebuildMeshGeometry(mesh: THREE.Mesh, meshComp: ECS.Component) {
         const geomType = meshComp.data.geometryType.value as string;
         const size = (meshComp.data.size?.value ?? { x: 1, y: 1, z: 1 }) as Vec3;
+        const customGeometry = meshComp.data.customGeometry?.value ?? null;
 
         mesh.geometry.dispose();
-        mesh.geometry = createGeometry(geomType, size);
+        mesh.geometry = createGeometry(geomType, size, customGeometry);
 
         mesh.userData.geometryType = geomType;
         mesh.userData.size = { ...size };
+        mesh.userData.customGeometrySig =
+            customGeometry?.positions?.length ?? undefined;
     }
 
     /** Update an existing Three.js mesh from its ECS entity data. */
@@ -149,13 +156,16 @@
                 z: number;
             };
             const color = meshComp.data.color.value as number;
+            const customGeometry = meshComp.data.customGeometry?.value ?? null;
+            const customCount = customGeometry?.positions?.length ?? 0;
 
-            const geomChanged =
-                mesh.userData.geometryType !== geomType ||
-                !mesh.userData.size ||
-                mesh.userData.size.x !== size.x ||
-                mesh.userData.size.y !== size.y ||
-                mesh.userData.size.z !== size.z;
+            const geomChanged = customCount > 0
+                ? mesh.userData.customGeometrySig !== customCount
+                : mesh.userData.geometryType !== geomType ||
+                  !mesh.userData.size ||
+                  mesh.userData.size.x !== size.x ||
+                  mesh.userData.size.y !== size.y ||
+                  mesh.userData.size.z !== size.z;
 
             if (geomChanged) {
                 rebuildMeshGeometry(mesh, meshComp);
@@ -234,6 +244,78 @@
         addComponentModalOpen = false;
     }
 
+    // ─── CSG (constructive solid geometry) ───────────────────────────────
+    let csgOperationModalOpen = $state(false);
+    let csgBusy = $state(false);
+
+    function openCSGOperation() {
+        if (selectedPartIds.length < 2) {
+            alert("Select at least 2 parts to perform a CSG operation.");
+            return;
+        }
+        csgOperationModalOpen = true;
+    }
+
+    /** Replace selected entities with a single entity whose mesh is the CSG result. */
+    async function applyCSGOperation(operation: CSGOperation) {
+        csgOperationModalOpen = false;
+        if (csgBusy) return;
+
+        const selectedEntities = selectedPartIds
+            .map((id) => modelData.entities.find((e) => e.id === id))
+            .filter(
+                (e): e is Entity =>
+                    !!e &&
+                    e.components.some((c) => c.name === "Mesh"),
+            );
+        const meshes = selectedEntities
+            .map((e) => meshByEntityId.get(e.id))
+            .filter((m): m is THREE.Mesh => !!m);
+
+        if (meshes.length < 2) {
+            alert("Select at least 2 parts with a Mesh component.");
+            return;
+        }
+
+        csgBusy = true;
+        try {
+            const result = await performCSG(operation, meshes);
+
+            // Create a fresh part entity to hold the merged geometry.
+            const entity = ECS.createPartEntity("CSG Result");
+            const meshComp = entity.components.find(
+                (c) => c.name === "Mesh",
+            )!;
+            meshComp.data.geometryType.value = "custom";
+            meshComp.data.color.value = result.color;
+            meshComp.data.customGeometry.value = result.customGeometry;
+
+            const transform = entity.components.find(
+                (c) => c.name === "Transform",
+            )!;
+            transform.data.position.value = { x: 0, y: 0, z: 0 };
+            transform.data.rotation.value = { x: 0, y: 0, z: 0 };
+            transform.data.scale.value = { x: 1, y: 1, z: 1 };
+
+            // Remove the original entities first, then add the merged one.
+            for (const e of selectedEntities) {
+                modelData.entities.splice(
+                    modelData.entities.indexOf(e),
+                    1,
+                );
+            }
+
+            modelData.entities.push(entity);
+            selectedPartIds = [entity.id];
+            selectedFaces = [];
+        } catch (e) {
+            console.error("CSG operation failed:", e);
+            alert("CSG operation failed: " + e);
+        } finally {
+            csgBusy = false;
+        }
+    }
+
     function handleKeydown(e: KeyboardEvent) {
         // Don't trigger shortcuts when typing in inputs
         const tag = (e.target as HTMLElement)?.tagName;
@@ -258,6 +340,12 @@
         if (e.key === "c" && !e.metaKey && !e.ctrlKey) {
             e.preventDefault();
             placingConstraint = !placingConstraint;
+        }
+
+        // CSG operation
+        if (e.key === "o" && !e.metaKey && !e.ctrlKey) {
+            e.preventDefault();
+            openCSGOperation();
         }
 
         // Mode toggle
@@ -495,6 +583,21 @@
             <Command.Item onSelect={() => handleAddComponent("Script")}
                 >Script</Command.Item
             >
+        </Command.Group>
+    </Command.List>
+</Command.Dialog>
+
+<Command.Dialog bind:open={csgOperationModalOpen} class="rounded-xl p-5">
+    <Command.Input placeholder="Choose a CSG operation..." />
+    <Command.List class="mt-3">
+        <Command.Empty>No results found.</Command.Empty>
+        <Command.Group heading="CSG Operations">
+            <Command.Item onSelect={() => applyCSGOperation("union")}>
+                Union (Combine selected parts)
+            </Command.Item>
+            <Command.Item onSelect={() => applyCSGOperation("subtract")}>
+                Subtract (First minus rest)
+            </Command.Item>
         </Command.Group>
     </Command.List>
 </Command.Dialog>
@@ -754,7 +857,9 @@
                     <Tooltip.Provider>
                         <Tooltip.Root>
                             <Tooltip.Trigger
-                                class="rounded-md px-3 py-3 text-sm font-bold tracking-wide shadow-sm duration-150 hover:bg-background/50 hover:text-green-500"
+                                onclick={openCSGOperation}
+                                disabled={selectedPartIds.length < 2 || csgBusy}
+                                class="rounded-md px-3 py-3 text-sm font-bold tracking-wide shadow-sm duration-150 hover:bg-background/50 hover:text-green-500 disabled:pointer-events-none disabled:opacity-40"
                                 ><SquaresSubtract
                                     class="h-4 w-4"
                                 /></Tooltip.Trigger

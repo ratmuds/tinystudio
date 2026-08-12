@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { System, type Entity } from "$lib/stores/ecs.svelte";
+import { System, type Entity, type Component } from "$lib/stores/ecs.svelte";
 import type { GameData } from "$lib/stores/data.svelte";
 import initJolt from "jolt-physics";
 
@@ -244,15 +244,14 @@ export class PhysicsSystem extends System {
                 ? this.jolt.EMotionType_Static
                 : this.jolt.EMotionType_Dynamic;
 
-            // Create a box shape for the entity
-            let boxShape = new this.jolt.BoxShape(
-                new this.jolt.Vec3(
-                    transformComp.data.scale.value.x / 2,
-                    transformComp.data.scale.value.y / 2,
-                    transformComp.data.scale.value.z / 2,
-                ),
-                0.0,
+            // Build the collider. Entities with custom (CSG) geometry get a
+            // dedicated mesh/hull collider instead of a transform-scaled box.
+            const shape = this.createPhysicsShape(
+                entity,
+                transformComp,
+                anchored,
             );
+            if (!shape) continue;
 
             // Create body creation settings
             let bodyPosition = new this.jolt.RVec3(
@@ -274,7 +273,7 @@ export class PhysicsSystem extends System {
                 quaternion.w,
             );
             let creationSettings = new this.jolt.BodyCreationSettings(
-                boxShape,
+                shape,
                 bodyPosition,
                 bodyRotation,
                 motionType,
@@ -472,6 +471,128 @@ export class PhysicsSystem extends System {
             this.bodyInterface = null;
         }
         this.jolt = null;
+    }
+
+    /**
+     * Build the Jolt collider for an entity.
+     *
+     * Entities with custom (CSG) geometry get a collider derived from the
+     * serialized vertex data instead of a transform-scaled box:
+     *  - anchored/static bodies use an exact concave triangle `MeshShape`
+     *  - dynamic bodies use a `ConvexHullShape` (a convex approximation, since
+     *    Jolt only allows static meshes)
+     * Everything else falls back to a box sized from the transform scale.
+     */
+    private createPhysicsShape(
+        entity: Entity,
+        transformComp: Component,
+        anchored: boolean,
+    ): any | null {
+        const meshComp = entity.components.find((c) => c.name === "Mesh");
+        const custom = meshComp?.data.customGeometry?.value as
+            | { positions: number[]; index?: number[] | null }
+            | null
+            | undefined;
+
+        const hasCustom = !!custom && (custom.positions?.length ?? 0) >= 9;
+
+        if (hasCustom) {
+            const scale = transformComp.data.scale.value as {
+                x: number;
+                y: number;
+                z: number;
+            };
+            // The custom geometry is stored in local/model space, so apply the
+            // entity's scale so the collider matches the rendered mesh.
+            const n = custom.positions.length;
+            const verts = new Float32Array(n);
+            for (let i = 0; i < n; i += 3) {
+                verts[i] = custom.positions[i] * scale.x;
+                verts[i + 1] = custom.positions[i + 1] * scale.y;
+                verts[i + 2] = custom.positions[i + 2] * scale.z;
+            }
+            const idx = custom.index as number[] | null | undefined;
+
+            try {
+                if (anchored && idx && idx.length >= 3) {
+                    // Exact concave triangle mesh for static bodies.
+                    const vl = new this.jolt.VertexList();
+                    for (let i = 0; i < n; i += 3) {
+                        vl.push_back(
+                            new this.jolt.Float3(
+                                verts[i],
+                                verts[i + 1],
+                                verts[i + 2],
+                            ),
+                        );
+                    }
+                    const il = new this.jolt.IndexedTriangleList();
+                    for (let i = 0; i < idx.length; i += 3) {
+                        il.push_back(
+                            new this.jolt.IndexedTriangle(
+                                idx[i],
+                                idx[i + 1],
+                                idx[i + 2],
+                                0,
+                            ),
+                        );
+                    }
+                    const settings = new this.jolt.MeshShapeSettings(vl, il);
+                    const result = settings.Create();
+                    if (!result.IsValid()) {
+                        console.warn(
+                            "MeshShape creation failed:",
+                            result.GetError(),
+                        );
+                        return null;
+                    }
+                    return result.Get();
+                }
+
+                // Convex hull approximation for dynamic bodies.
+                const pts = new this.jolt.ArrayVec3();
+                for (let i = 0; i < n; i += 3) {
+                    pts.push_back(
+                        new this.jolt.Vec3(
+                            verts[i],
+                            verts[i + 1],
+                            verts[i + 2],
+                        ),
+                    );
+                }
+                const settings = new this.jolt.ConvexHullShapeSettings(pts, 0.1);
+                const result = settings.Create();
+                if (!result.IsValid()) {
+                    console.warn(
+                        "ConvexHullShape creation failed:",
+                        result.GetError(),
+                    );
+                    return null;
+                }
+                return result.Get();
+            } catch (e) {
+                console.warn(
+                    "Failed to build collider from custom geometry:",
+                    e,
+                );
+                // Fall through to the box fallback on error.
+            }
+        }
+
+        // Fallback: box sized from the transform scale.
+        const scale = transformComp.data.scale.value as {
+            x: number;
+            y: number;
+            z: number;
+        };
+        return new this.jolt.BoxShape(
+            new this.jolt.Vec3(
+                scale.x / 2,
+                scale.y / 2,
+                scale.z / 2,
+            ),
+            0.0,
+        );
     }
 
     private spawnEntity(entity: Entity): void {

@@ -114,6 +114,11 @@ function createMeshComponent(): Component {
             "Dimensions of the mesh",
         ),
         color: makeEntry("color", 0x44aa44, "Base color of the mesh"),
+        customGeometry: makeEntry(
+            "json",
+            null,
+            "Serialized custom geometry (positions + index). Overrides primitive geometryType.",
+        ),
     };
     return c;
 }
