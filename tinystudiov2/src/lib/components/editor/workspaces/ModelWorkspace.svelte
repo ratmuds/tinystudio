@@ -46,6 +46,7 @@
     import { createGeometry, createMesh, type Vec3 } from "$lib/utils/geometry";
     import { performCSG, type CSGOperation } from "$lib/utils/csg";
     import ComponentPropertiesPanel from "$lib/components/editor/sidebar/ComponentPropertiesPanel.svelte";
+    import ProgressBar from "$lib/components/editor/ProgressBar.svelte";
 
     let {
         modelData,
@@ -998,3 +999,17 @@
         </div>
     </Resizable.Pane>
 </Resizable.PaneGroup>
+
+{#if csgBusy}
+    <div
+        class="fixed right-5 bottom-5 z-50 w-56 rounded-lg border border-border/60 bg-card/95 p-3 shadow-lg backdrop-blur-sm"
+        role="status"
+        aria-live="polite"
+    >
+        <div class="mb-2 flex items-center justify-between gap-3">
+            <span class="text-xs font-medium text-foreground">Processing CSG</span>
+            <span class="text-[10px] text-muted-foreground">Please wait...</span>
+        </div>
+        <ProgressBar />
+    </div>
+{/if}
