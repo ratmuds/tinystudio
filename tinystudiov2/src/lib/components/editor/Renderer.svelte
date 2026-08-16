@@ -206,6 +206,8 @@
             { entityId: string; faceIndex: number; mesh: THREE.Mesh }[]
         >([]),
         addLights = true,
+        orbitControls = true,
+        domElement = $bindable<HTMLElement | null>(null),
         placingConstraint = $bindable(false),
         onConstraintCreated,
     }: {
@@ -221,6 +223,8 @@
             mesh: THREE.Mesh;
         }[];
         addLights?: boolean;
+        orbitControls?: boolean;
+        domElement?: HTMLElement | null;
         placingConstraint?: boolean;
         onConstraintCreated?: (entity: Entity) => void;
     } = $props();
@@ -352,16 +356,20 @@
         renderer.domElement.style.height = "100%";
         renderer.domElement.style.touchAction = "none";
         container.appendChild(renderer.domElement);
+        domElement = renderer.domElement;
 
         // SETUP CONTROLS AND LIGHTING
-        const controls = new OrbitControls(camera, renderer.domElement);
-        controls.target.copy(new THREE.Vector3(0, 0, 0));
-        controls.enableDamping = true;
-        controls.dampingFactor = 0.05;
-        controls.minDistance = 0.1;
-        controls.maxDistance = 1000;
-        controls.maxPolarAngle = Math.PI / 2;
-        controls.update();
+        let controls: OrbitControls | null = null;
+        if (orbitControls) {
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.target.copy(new THREE.Vector3(0, 0, 0));
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.minDistance = 0.1;
+            controls.maxDistance = 1000;
+            controls.maxPolarAngle = Math.PI / 2;
+            controls.update();
+        }
 
         if (addLights) {
             const ambientLight = new THREE.AmbientLight(0xffffff, 1.25);
@@ -389,12 +397,12 @@
         let isTransformDragging = false;
         let transformClicked = false;
         tc.addEventListener("mouseDown", () => {
-            controls.enabled = false;
+            if (controls) controls.enabled = false;
             isTransformDragging = true;
             transformClicked = true;
         });
         tc.addEventListener("mouseUp", () => {
-            controls.enabled = true;
+            if (controls) controls.enabled = true;
             isTransformDragging = false;
         });
 

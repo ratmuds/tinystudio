@@ -8,12 +8,14 @@
     import { RuntimeData, WorldData } from "$lib/stores/data.svelte";
     import {
         clearDirtyFlags,
+        createCameraEntity,
         type Component,
         type Entity,
     } from "$lib/stores/ecs.svelte";
     import { MeshSystem } from "$lib/systems/MeshSystem.svelte";
     import { PhysicsSystem } from "$lib/systems/PhysicsSystem.svelte";
     import { ScriptingSystem } from "$lib/systems/ScriptingSystem.svelte";
+    import { CameraSystem } from "$lib/systems/CameraSystem.svelte";
     import { EventEmitter } from "$lib/stores/EventEmitter";
 
     let {
@@ -26,6 +28,10 @@
     let isRunning = $state(false);
     let animationId = $state<number | null>(null);
     let lastTime = $state(0);
+
+    // The viewport canvas (from the Renderer) that the camera controls attach to.
+    let domElement = $state<HTMLElement | null>(null);
+    let cameraSystem = $state<CameraSystem | null>(null);
 
     // Per-run, flat list of cloned, world-space part entities. Each ModelRef
     // world-entity is expanded into per-instance clones of the referenced
@@ -223,6 +229,27 @@
         // systems can mutate without touching the source game data.
         runtimeEntities = flattenWorldForRuntime(worldData);
 
+        // Ensure there's a camera entity to drive the viewport. If the world
+        // defines one (Camera.active), that wins; otherwise spawn a default.
+        const hasCamera = runtimeEntities.some((e) =>
+            e.components.some((c) => c.name === "Camera"),
+        );
+        if (!hasCamera) {
+            const defaultCamera = createCameraEntity("Default Camera");
+            const transform = defaultCamera.components.find(
+                (c) => c.name === "Transform",
+            );
+            if (transform) {
+                transform.data.position.value = { x: 8, y: 6, z: 12 };
+                transform.data.position.dirty = true;
+            }
+            const cam = defaultCamera.components.find(
+                (c) => c.name === "Camera",
+            );
+            if (cam) cam.data.active.value = true;
+            runtimeEntities.push(defaultCamera);
+        }
+
         // Create and register systems
         // Order: scripting (writes transforms) → physics (syncs bodies, steps sim) → mesh (reads transforms)
         const scriptingSystem = new ScriptingSystem(
@@ -236,6 +263,10 @@
 
         const meshSystem = new MeshSystem(scene, runtimeData.gameData);
         runtimeData.systems.push(meshSystem);
+
+        cameraSystem = new CameraSystem(scene, camera, runtimeData.gameData);
+        cameraSystem.setDomElement(domElement);
+        runtimeData.systems.push(cameraSystem);
 
         // Setup systems (await async setups like PhysicsSystem)
         for (const system of runtimeData.systems) {
@@ -268,6 +299,7 @@
         }
         runtimeData.systems = [];
         runtimeEntities = [];
+        cameraSystem = null;
     }
 
     function toggleRuntime() {
@@ -282,6 +314,13 @@
     $effect(() => {
         selectedWorldId;
         if (untrack(() => isRunning)) stopRuntime();
+    });
+
+    // Propagate the viewport canvas to the camera system once available.
+    $effect(() => {
+        if (cameraSystem && domElement) {
+            cameraSystem.setDomElement(domElement);
+        }
     });
 
     // Cleanup on destroy
@@ -354,7 +393,13 @@
                 class="relative h-full w-full overflow-hidden bg-muted/40"
                 style="background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.04) 0 10px, transparent 10px 20px);"
             >
-                <Renderer {scene} {camera} addLights={false} />
+                <Renderer
+                    {scene}
+                    {camera}
+                    addLights={false}
+                    orbitControls={false}
+                    bind:domElement
+                />
             </div>
         {:else}
             <div

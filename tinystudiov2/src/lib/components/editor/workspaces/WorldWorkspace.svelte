@@ -19,6 +19,7 @@
         Boxes,
         CornerDownRight,
         SquaresUnite,
+        Camera,
     } from "@lucide/svelte";
 
     import { GameData, WorldData, ModelData } from "$lib/stores/data.svelte";
@@ -26,6 +27,13 @@
     import type { Entity } from "$lib/stores/ecs.svelte";
     import { createGeometry, createMesh, type Vec3 } from "$lib/utils/geometry";
     import ComponentPropertiesPanel from "$lib/components/editor/sidebar/ComponentPropertiesPanel.svelte";
+    import AddEntityModal from "$lib/components/editor/AddEntityModal.svelte";
+    import {
+        createCameraHelper,
+        syncCameraHelper,
+        disposeCameraHelper,
+        type CameraHelperEntry,
+    } from "$lib/utils/cameraHelper";
 
     // ─── Props from parent ──────────────────────────────────────────────
     let {
@@ -69,34 +77,72 @@
     // ─── ECS ↔ Three.js sync ────────────────────────────────────────────
     // Maps world entity ID → Three.js group (contains all meshes for that model instance)
     const groupByEntityId = new Map<string, THREE.Group>();
+    // Maps world entity ID → camera debug helper (frustum + pick body).
+    const cameraHelpers = new Map<string, CameraHelperEntry>();
 
-    /** Create a Three.js group for a world entity that references a model. */
-    function createGroupForEntity(entity: Entity): THREE.Group {
-        const modelRefComp = entity.components.find(
-            (c) => c.name === "ModelRef",
-        );
+    let addEntityModalOpen = $state(false);
+
+    /** Create a Three.js group for a world entity that references a model or has a Mesh. */
+    function createGroupForEntity(entity: Entity): THREE.Group | null {
         const transformComp = entity.components.find(
             (c) => c.name === "Transform",
         );
+        if (!transformComp) return null;
 
-        if (!modelRefComp || !transformComp) return new THREE.Group();
-
-        const modelId = modelRefComp.data.modelId.value as string;
-        const model = gameData.models.find((m) => m.id === modelId);
-        if (!model) return new THREE.Group();
+        const modelRefComp = entity.components.find(
+            (c) => c.name === "ModelRef",
+        );
+        const meshComp = entity.components.find((c) => c.name === "Mesh");
 
         const group = new THREE.Group();
 
-        // For each part entity in the model, create a mesh
-        for (const partEntity of model.entities) {
-            const meshComp = partEntity.components.find(
-                (c) => c.name === "Mesh",
-            );
-            const partTransform = partEntity.components.find(
-                (c) => c.name === "Transform",
-            );
-            if (!meshComp || !partTransform) continue;
+        if (modelRefComp) {
+            const modelId = modelRefComp.data.modelId.value as string;
+            const model = gameData.models.find((m) => m.id === modelId);
+            if (!model) return null;
 
+            // For each part entity in the model, create a mesh
+            for (const partEntity of model.entities) {
+                const partMeshComp = partEntity.components.find(
+                    (c) => c.name === "Mesh",
+                );
+                const partTransform = partEntity.components.find(
+                    (c) => c.name === "Transform",
+                );
+                if (!partMeshComp || !partTransform) continue;
+
+                const geomType = partMeshComp.data.geometryType.value as string;
+                const size = partMeshComp.data.size.value as Vec3;
+                const color = partMeshComp.data.color.value as number;
+                const customGeometry =
+                    partMeshComp.data.customGeometry?.value ?? null;
+
+                const geometry = createGeometry(
+                    geomType,
+                    size,
+                    customGeometry,
+                );
+                const mesh = createMesh(geometry, color, entity.id);
+
+                const partPos = partTransform.data.position.value as Vec3;
+                mesh.position.set(partPos.x, partPos.y, partPos.z);
+
+                const partRot = partTransform.data.rotation.value as Vec3;
+                mesh.rotation.set(partRot.x, partRot.y, partRot.z);
+
+                const partScale = partTransform.data.scale.value as Vec3;
+                mesh.scale.set(partScale.x, partScale.y, partScale.z);
+
+                // Tag the mesh with the WORLD entity id so the Renderer can
+                // resolve selections back to this world instance (the engine
+                // also reads `partId` to recognise parts in-game).
+                mesh.userData.partId = entity.id;
+                mesh.userData.entityId = entity.id;
+
+                group.add(mesh);
+            }
+        } else if (meshComp) {
+            // A raw part placed directly in the world.
             const geomType = meshComp.data.geometryType.value as string;
             const size = meshComp.data.size.value as Vec3;
             const color = meshComp.data.color.value as number;
@@ -104,23 +150,11 @@
 
             const geometry = createGeometry(geomType, size, customGeometry);
             const mesh = createMesh(geometry, color, entity.id);
-
-            const partPos = partTransform.data.position.value as Vec3;
-            mesh.position.set(partPos.x, partPos.y, partPos.z);
-
-            const partRot = partTransform.data.rotation.value as Vec3;
-            mesh.rotation.set(partRot.x, partRot.y, partRot.z);
-
-            const partScale = partTransform.data.scale.value as Vec3;
-            mesh.scale.set(partScale.x, partScale.y, partScale.z);
-
-            // Tag the mesh with the WORLD entity id so the Renderer can
-            // resolve selections back to this world instance (the engine
-            // also reads `partId` to recognise parts in-game).
             mesh.userData.partId = entity.id;
             mesh.userData.entityId = entity.id;
-
             group.add(mesh);
+        } else {
+            return null;
         }
 
         // Set group position from the world entity's transform
@@ -144,27 +178,74 @@
         const transformComp = entity.components.find(
             (c) => c.name === "Transform",
         );
-        if (!transformComp) return;
+        if (transformComp) {
+            const pos = transformComp.data.position.value as {
+                x: number;
+                y: number;
+                z: number;
+            };
+            const rot = transformComp.data.rotation.value as {
+                x: number;
+                y: number;
+                z: number;
+            };
+            const scl = transformComp.data.scale.value as {
+                x: number;
+                y: number;
+                z: number;
+            };
 
-        const pos = transformComp.data.position.value as {
-            x: number;
-            y: number;
-            z: number;
-        };
-        const rot = transformComp.data.rotation.value as {
-            x: number;
-            y: number;
-            z: number;
-        };
-        const scl = transformComp.data.scale.value as {
-            x: number;
-            y: number;
-            z: number;
-        };
+            group.position.set(pos.x, pos.y, pos.z);
+            group.rotation.set(rot.x, rot.y, rot.z);
+            group.scale.set(scl.x, scl.y, scl.z);
+        }
 
-        group.position.set(pos.x, pos.y, pos.z);
-        group.rotation.set(rot.x, rot.y, rot.z);
-        group.scale.set(scl.x, scl.y, scl.z);
+        // For raw parts placed directly in the world, keep the mesh in sync
+        // with Mesh component edits (size/type/color).
+        const meshComp = entity.components.find((c) => c.name === "Mesh");
+        if (meshComp) {
+            const mesh = group.children.find(
+                (child) => child instanceof THREE.Mesh,
+            ) as THREE.Mesh | undefined;
+            if (!mesh) return;
+
+            const geomType = meshComp.data.geometryType.value as string;
+            const size = meshComp.data.size?.value ?? { x: 1, y: 1, z: 1 };
+            const customGeometry = meshComp.data.customGeometry?.value ?? null;
+            const customCount = customGeometry?.positions?.length ?? 0;
+            const userData = mesh.userData as {
+                geometryType?: string;
+                size?: Vec3;
+                customGeometrySig?: number;
+            };
+
+            const geomChanged =
+                customCount > 0
+                    ? userData.customGeometrySig !== customCount
+                    : userData.geometryType !== geomType ||
+                      !userData.size ||
+                      userData.size.x !== size.x ||
+                      userData.size.y !== size.y ||
+                      userData.size.z !== size.z;
+
+            if (geomChanged) {
+                mesh.geometry.dispose();
+                mesh.geometry = createGeometry(
+                    geomType,
+                    size as Vec3,
+                    customGeometry,
+                );
+                userData.geometryType = geomType;
+                userData.size = { ...size } as Vec3;
+                userData.customGeometrySig =
+                    customGeometry?.positions?.length ?? undefined;
+            }
+
+            const material = mesh.material as THREE.MeshStandardMaterial;
+            if (material?.color) {
+                material.color.setHex(meshComp.data.color.value as number);
+            }
+        }
     }
 
     /** Spawn a model instance into the world. */
@@ -217,8 +298,64 @@
             });
             groupByEntityId.delete(entityId);
         }
+        const helper = cameraHelpers.get(entityId);
+        if (helper) {
+            disposeCameraHelper(helper, scene);
+            cameraHelpers.delete(entityId);
+        }
         selectedPartIds = selectedPartIds.filter((id) => id !== entityId);
         selectedFaces = selectedFaces.filter((f) => f.entityId !== entityId);
+    }
+
+    /** Spawn a raw Part entity directly into the world. */
+    function spawnPart() {
+        const entity = ECS.createPartEntity(
+            `Part ${worldData.entities.length + 1}`,
+        );
+        const transform = entity.components.find(
+            (c) => c.name === "Transform",
+        )!;
+        transform.data.position.value = {
+            x: +(Math.random() * 4 - 2).toFixed(2),
+            y: 0.5,
+            z: +(Math.random() * 4 - 2).toFixed(2),
+        };
+        const mesh = entity.components.find((c) => c.name === "Mesh")!;
+        const color = new THREE.Color().setHSL(Math.random(), 0.6, 0.5);
+        mesh.data.color.value = color.getHex();
+
+        worldData.entities.push(entity);
+        selectedPartIds = [entity.id];
+    }
+
+    /** Spawn a Camera entity directly into the world. */
+    function spawnCamera() {
+        const camCount = worldData.entities.filter((e) =>
+            e.components.some((c) => c.name === "Camera"),
+        ).length;
+        const entity = ECS.createCameraEntity(`Camera ${camCount + 1}`);
+        const transform = entity.components.find(
+            (c) => c.name === "Transform",
+        )!;
+        transform.data.position.value = {
+            x: +(Math.random() * 4 - 2).toFixed(2),
+            y: 1.5,
+            z: +(Math.random() * 4 - 2).toFixed(2),
+        };
+
+        worldData.entities.push(entity);
+        selectedPartIds = [entity.id];
+    }
+
+    function handleEntitySelect(entityType: string) {
+        if (entityType === "Part") {
+            spawnPart();
+        } else if (entityType === "Camera") {
+            spawnCamera();
+        } else if (entityType === "Light") {
+            // TODO: createLightEntity()
+        }
+        addEntityModalOpen = false;
     }
 
     function getSelectedEntity(): Entity | undefined {
@@ -242,6 +379,15 @@
     function handleKeydown(e: KeyboardEvent) {
         const tag = (e.target as HTMLElement)?.tagName;
         if (tag === "INPUT" || tag === "TEXTAREA") return;
+
+        if (e.key === "a" && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault();
+            addEntityModalOpen = !addEntityModalOpen;
+        }
+        if (e.key === "b" && !e.metaKey && !e.ctrlKey) {
+            e.preventDefault();
+            spawnPart();
+        }
 
         // Tool shortcuts
         if (e.key === "q") currentTool = "select";
@@ -335,9 +481,23 @@
         for (const entity of entities) {
             seenIds.add(entity.id);
 
+            // Camera entities render as a debug frustum instead of a group.
+            if (entity.components.some((c) => c.name === "Camera")) {
+                let entry: CameraHelperEntry | null | undefined =
+                    cameraHelpers.get(entity.id);
+                if (!entry) {
+                    entry = createCameraHelper(entity, scene);
+                    if (entry) cameraHelpers.set(entity.id, entry);
+                }
+                if (entry && entity.id !== attachedEntityId) {
+                    syncCameraHelper(entry, entity);
+                }
+                continue;
+            }
+
             let group = groupByEntityId.get(entity.id);
             if (!group) {
-                group = createGroupForEntity(entity);
+                group = createGroupForEntity(entity) ?? undefined;
             }
 
             if (group && entity.id !== attachedEntityId) {
@@ -361,6 +521,14 @@
                     }
                 });
                 groupByEntityId.delete(id);
+            }
+        }
+
+        // Remove camera helpers for entities that no longer exist
+        for (const [id, entry] of cameraHelpers) {
+            if (!seenIds.has(id)) {
+                disposeCameraHelper(entry, scene);
+                cameraHelpers.delete(id);
             }
         }
     });
@@ -411,6 +579,8 @@
 
 <svelte:document onkeydown={handleKeydown} />
 
+<AddEntityModal bind:open={addEntityModalOpen} onSelect={handleEntitySelect} />
+
 <Resizable.PaneGroup direction="horizontal" class="min-h-0 flex-1">
     <!-- Left panel: World entities + Model library -->
     <Resizable.Pane defaultSize={20} class="overflow-hidden border-r">
@@ -424,10 +594,20 @@
                 >
                     World Objects
                 </h2>
+                <button
+                    onclick={() => (addEntityModalOpen = true)}
+                    class="rounded-md p-1.5 text-muted-foreground duration-150 hover:bg-muted/60 hover:text-green-500 active:scale-90"
+                    aria-label="Add entity"
+                >
+                    <Plus class="h-4 w-4" />
+                </button>
             </div>
 
             <div class="min-h-0 flex-1 overflow-auto px-2 py-1">
                 {#each worldData.entities as entity (entity.id)}
+                    {@const isCamera = entity.components.some(
+                        (c) => c.name === "Camera",
+                    )}
                     <div
                         class="group mx-1 flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-sm duration-100 {selectedPartIds.includes(
                             entity.id,
@@ -436,7 +616,15 @@
                             : 'text-foreground hover:bg-muted/60'}"
                         onclick={() => (selectedPartIds = [entity.id])}
                     >
-                        <Boxes class="h-3.5 w-3.5 shrink-0 text-green-500" />
+                        {#if isCamera}
+                            <Camera
+                                class="h-3.5 w-3.5 shrink-0 text-green-500"
+                            />
+                        {:else}
+                            <Boxes
+                                class="h-3.5 w-3.5 shrink-0 text-green-500"
+                            />
+                        {/if}
                         <span class="flex-1 truncate">{entity.name}</span>
                         <button
                             class="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 duration-100 group-hover:opacity-100 hover:bg-destructive/15 hover:text-destructive"

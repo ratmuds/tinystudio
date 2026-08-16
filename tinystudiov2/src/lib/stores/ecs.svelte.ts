@@ -268,6 +268,55 @@ function createConstraintEntity(name: string = "Constraint"): Entity {
     return e;
 }
 
+function createCameraComponent(): Component {
+    const c = new Component();
+    c.id = crypto.randomUUID();
+    c.name = "Camera";
+    c.tooltip =
+        "Controls the active viewport camera. mode: fixed, orbit (around target), firstPerson (FPS), or fly (free flight).";
+    c.data = {
+        active: makeEntry(
+            "boolean",
+            false,
+            "Whether this is the active camera in play mode",
+        ),
+        mode: makeEntry(
+            "string",
+            "orbit",
+            "Camera mode: fixed, orbit, firstPerson, or fly",
+        ),
+        fov: makeEntry("number", 75, "Vertical field of view in degrees"),
+        target: makeEntry(
+            "vector3",
+            { x: 0, y: 0, z: 0 },
+            "Look-at point (fixed/orbit) or initial view direction (firstPerson)",
+        ),
+        distance: makeEntry(
+            "number",
+            8,
+            "Orbit distance from target",
+        ),
+        yaw: makeEntry("number", 0, "Orbit yaw in radians"),
+        pitch: makeEntry("number", 0, "Orbit pitch in radians"),
+        moveSpeed: makeEntry(
+            "number",
+            8,
+            "firstPerson/fly movement speed",
+        ),
+    };
+    return c;
+}
+
+function createCameraEntity(name: string = "Camera"): Entity {
+    const e = new Entity();
+    e.id = crypto.randomUUID();
+    e.name = name;
+    e.baseEntity = "camera";
+    e.components = [createTransformComponent(), createCameraComponent()];
+    e.events = new EventEmitter();
+    return e;
+}
+
 export {
     type BaseEntityType,
     Entity,
@@ -284,4 +333,6 @@ export {
     createScriptComponent,
     createPartEntity,
     createConstraintEntity,
+    createCameraComponent,
+    createCameraEntity,
 };

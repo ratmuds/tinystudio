@@ -33,6 +33,14 @@ export class ScriptingSystem extends System {
     private inputManagerEvents = new EventEmitter();
     private onKeyDown: ((e: KeyboardEvent) => void) | null = null;
     private onKeyUp: ((e: KeyboardEvent) => void) | null = null;
+    private mouseButtons: Set<number> = new Set();
+    private mousePosition = { x: 0, y: 0 };
+    private mouseDelta = { x: 0, y: 0 };
+    private scrollY = 0;
+    private onPointerMove: ((e: PointerEvent) => void) | null = null;
+    private onPointerDown: ((e: PointerEvent) => void) | null = null;
+    private onPointerUp: ((e: PointerEvent) => void) | null = null;
+    private onWheel: ((e: WheelEvent) => void) | null = null;
     private scopes = new Map<string, { lua: LuaEngine; scope: StateScope }>();
 
     constructor(scene: THREE.Scene, gameData: GameData) {
@@ -60,6 +68,32 @@ export class ScriptingSystem extends System {
         };
         window.addEventListener("keydown", this.onKeyDown);
         window.addEventListener("keyup", this.onKeyUp);
+
+        // Pointer / mouse input. Position is normalized to [0..1] relative to
+        // the window; delta is in raw pixels since the last frame.
+        this.onPointerMove = (e: PointerEvent) => {
+            this.mousePosition.x = e.clientX / window.innerWidth;
+            this.mousePosition.y = e.clientY / window.innerHeight;
+            this.mouseDelta.x += e.movementX;
+            this.mouseDelta.y += e.movementY;
+            this.inputManagerEvents.emit("mouseMove");
+        };
+        this.onPointerDown = (e: PointerEvent) => {
+            this.mouseButtons.add(e.button);
+            this.inputManagerEvents.emit("mouseDown", e.button);
+        };
+        this.onPointerUp = (e: PointerEvent) => {
+            this.mouseButtons.delete(e.button);
+            this.inputManagerEvents.emit("mouseUp", e.button);
+        };
+        this.onWheel = (e: WheelEvent) => {
+            this.scrollY += e.deltaY;
+            this.inputManagerEvents.emit("scroll");
+        };
+        window.addEventListener("pointermove", this.onPointerMove);
+        window.addEventListener("pointerdown", this.onPointerDown);
+        window.addEventListener("pointerup", this.onPointerUp);
+        window.addEventListener("wheel", this.onWheel);
     }
 
     private async createLua(): Promise<LuaEngine> {
@@ -145,6 +179,96 @@ export class ScriptingSystem extends System {
                     self.x * other.y - self.y * other.x
                 )
             end
+
+            function Vector3.__div(a, b)
+                if type(b) == "number" then
+                    return Vector3.new(a.x / b, a.y / b, a.z / b)
+                end
+                return Vector3.new(a.x / b.x, a.y / b.y, a.z / b.z)
+            end
+
+            function Vector3:clone()
+                return Vector3.new(self.x, self.y, self.z)
+            end
+
+            function Vector3:distance(other)
+                local dx = self.x - other.x
+                local dy = self.y - other.y
+                local dz = self.z - other.z
+                return math.sqrt(dx * dx + dy * dy + dz * dz)
+            end
+
+            function Vector3:lerp(other, t)
+                t = t or 0.5
+                return Vector3.new(
+                    self.x + (other.x - self.x) * t,
+                    self.y + (other.y - self.y) * t,
+                    self.z + (other.z - self.z) * t
+                )
+            end
+
+            -- Yaw/pitch are in radians and match the Camera component's
+            -- orbit yaw/pitch, so they can drive the camera directly.
+            function Vector3:getYaw()
+                return math.atan2(self.x, self.z)
+            end
+
+            function Vector3:setYaw(yaw)
+                local lenXZ = math.sqrt(self.x * self.x + self.z * self.z)
+                self.x = math.sin(yaw) * lenXZ
+                self.z = math.cos(yaw) * lenXZ
+                return self
+            end
+
+            function Vector3:getPitch()
+                return math.atan2(self.y, math.sqrt(self.x * self.x + self.z * self.z))
+            end
+
+            function Vector3:setPitch(pitch)
+                local len = self:length()
+                if len == 0 then return self end
+                self.y = math.sin(pitch) * len
+                local lenXZ = math.cos(pitch) * len
+                local yaw = self:getYaw()
+                self.x = math.sin(yaw) * lenXZ
+                self.z = math.cos(yaw) * lenXZ
+                return self
+            end
+        `);
+
+        // 1b. Vector2 Metatable
+        lua.doStringSync(`
+            Vector2 = {}
+            Vector2.__index = Vector2
+
+            function Vector2.new(x, y)
+                return setmetatable({ x = x or 0, y = y or 0 }, Vector2)
+            end
+
+            function Vector2:__tostring()
+                return string.format("Vector2(%.4f, %.4f)", self.x, self.y)
+            end
+
+            function Vector2.__add(a, b)
+                return Vector2.new(a.x + b.x, a.y + b.y)
+            end
+
+            function Vector2.__sub(a, b)
+                return Vector2.new(a.x - b.x, a.y - b.y)
+            end
+
+            function Vector2.__mul(a, b)
+                if type(a) == "number" then
+                    return Vector2.new(b.x * a, b.y * a)
+                elseif type(b) == "number" then
+                    return Vector2.new(a.x * b, a.y * b)
+                end
+                return Vector2.new(a.x * b.x, a.y * b.y)
+            end
+
+            function Vector2:length()
+                return math.sqrt(self.x * self.x + self.y * self.y)
+            end
         `);
 
         // 2. Entity, component, and component-data metatables
@@ -153,7 +277,7 @@ export class ScriptingSystem extends System {
             (componentName: string, key: string, type: string) => {
                 console.warn(
                     `Lua component data "${componentName}.${key}" uses unsupported type "${type}". ` +
-                        "Only string and vector3 are currently supported.",
+                        "Only string, number, boolean, and vector3 are currently supported.",
                 );
             },
         );
@@ -203,11 +327,15 @@ export class ScriptingSystem extends System {
             end
 
             function Component:__index(key)
+                if key == "on" or key == "off" or key == "emit" then
+                    return rawget(Component, key)
+                end
+
                 local comp = rawget(self, "_component")
                 local entry = comp.data[key]
                 if not entry then return nil end
 
-                if entry.type == "string" then
+                if entry.type == "string" or entry.type == "number" or entry.type == "boolean" then
                     return entry.value
                 elseif entry.type == "vector3" then
                     local value = entry.value
@@ -230,6 +358,14 @@ export class ScriptingSystem extends System {
                     if type(value) ~= "string" then return end
                     entry.value = value
                     entry.dirty = true
+                elseif entry.type == "number" then
+                    if type(value) ~= "number" then return end
+                    entry.value = value
+                    entry.dirty = true
+                elseif entry.type == "boolean" then
+                    if type(value) ~= "boolean" then return end
+                    entry.value = value
+                    entry.dirty = true
                 elseif entry.type == "vector3" then
                     if not value then return end
                     entry.value = {
@@ -243,13 +379,39 @@ export class ScriptingSystem extends System {
                 end
             end
 
+            -- Component event helpers. "part.physics:on('touched', cb)" is an
+            -- alias for "part:on('Physics.touched', cb)" — the component name
+            -- prefixes the event name automatically.
+            function Component:on(eventName, callback)
+                local comp = rawget(self, "_component")
+                local entity = rawget(self, "_entity")
+                if not comp or not entity then return nil end
+                local callbackId = __registerEventCallback(callback)
+                return __entityOn(entity.id, comp.name .. "." .. eventName, callbackId)
+            end
+
+            function Component:off(listenerId)
+                local entity = rawget(self, "_entity")
+                if entity then __entityOff(entity.id, listenerId) end
+            end
+
+            function Component:emit(eventName, ...)
+                local comp = rawget(self, "_component")
+                local entity = rawget(self, "_entity")
+                if not comp or not entity then return end
+                __entityEmit(entity.id, comp.name .. "." .. eventName, ...)
+            end
+
             function Entity:__index(key)
                 local method = rawget(Entity, key)
                 if method then return method end
 
                 local component = self:_findComponent(key:gsub("^%l", string.upper))
                 if component then
-                    return setmetatable({ _component = component }, Component)
+                    return setmetatable(
+                        { _component = component, _entity = self },
+                        Component
+                    )
                 end
                 return nil
             end
@@ -276,6 +438,20 @@ export class ScriptingSystem extends System {
                     isKeyPressed = function(keyCode)
                         return __isKeyPressedJS(keyCode)
                     end,
+                    isMouseButtonDown = function(button)
+                        return __isMouseButtonDownJS(button)
+                    end,
+                    getMousePosition = function()
+                        local p = __getMousePositionJS()
+                        return Vector2.new(p[1] or 0, p[2] or 0)
+                    end,
+                    getMouseDelta = function()
+                        local p = __getMouseDeltaJS()
+                        return Vector2.new(p[1] or 0, p[2] or 0)
+                    end,
+                    getScroll = function()
+                        return __getScrollJS()
+                    end,
                     on = function(self, eventName, callback)
                         local callbackId = __registerEventCallback(callback)
                         return __inputManagerOn(eventName, callbackId)
@@ -283,7 +459,15 @@ export class ScriptingSystem extends System {
                     off = function(self, listenerId)
                         __inputManagerOff(listenerId)
                     end
-                }
+                },
+                setActiveCamera = function(entityId)
+                    return __setActiveCameraJS(entityId)
+                end,
+                getActiveCamera = function()
+                    local id = __getActiveCameraJS()
+                    if not id then return nil end
+                    return getEntityById(id)
+                end
             }
         `);
 
@@ -298,6 +482,53 @@ export class ScriptingSystem extends System {
 
         lua.global.set("__isKeyPressedJS", (keyCode: string) => {
             return this.keysPressed.has(keyCode);
+        });
+
+        lua.global.set("__isMouseButtonDownJS", (button: number) => {
+            return this.mouseButtons.has(button);
+        });
+
+        lua.global.set("__getMousePositionJS", () => {
+            return [this.mousePosition.x, this.mousePosition.y];
+        });
+
+        lua.global.set("__getMouseDeltaJS", () => {
+            return [this.mouseDelta.x, this.mouseDelta.y];
+        });
+
+        lua.global.set("__getScrollJS", () => {
+            return this.scrollY;
+        });
+
+        // Camera selection. The active camera is the entity with a Camera
+        // component whose `active` flag is true (falling back to the first
+        // one). Setting it flips `active` on all camera entities so the
+        // CameraSystem picks the right one next frame.
+        lua.global.set("__getActiveCameraJS", () => {
+            const cameras = this.entities.filter((e) =>
+                e.components.some((c) => c.name === "Camera"),
+            );
+            const active =
+                cameras.find((e) => {
+                    const comp = e.components.find(
+                        (c) => c.name === "Camera",
+                    );
+                    return comp?.data.active.value === true;
+                }) ?? cameras[0];
+            return active ? active.id : false;
+        });
+
+        lua.global.set("__setActiveCameraJS", (entityId: string) => {
+            let found = false;
+            for (const e of this.entities) {
+                const comp = e.components.find((c) => c.name === "Camera");
+                if (!comp) continue;
+                const active = e.id === entityId;
+                if (active) found = true;
+                comp.data.active.value = active;
+                comp.data.active.dirty = true;
+            }
+            return found;
         });
 
         lua.global.set(
@@ -418,7 +649,7 @@ export class ScriptingSystem extends System {
             console.warn("No runnable script code for entity", entity.id);
             return;
         }
-        d;
+
         const lua = await this.createLua();
         const stateScope = new StateScope(lua, entity.id, entity.name);
         this.registerGlobals(lua, stateScope);
@@ -536,6 +767,11 @@ export class ScriptingSystem extends System {
                 this.scopes.delete(entityId);
             }
         }
+
+        // Mouse delta / scroll accumulate between frames; reset them per tick.
+        this.mouseDelta.x = 0;
+        this.mouseDelta.y = 0;
+        this.scrollY = 0;
     }
 
     cleanup(): void {
@@ -549,7 +785,18 @@ export class ScriptingSystem extends System {
         if (this.onKeyDown)
             window.removeEventListener("keydown", this.onKeyDown);
         if (this.onKeyUp) window.removeEventListener("keyup", this.onKeyUp);
+        if (this.onPointerMove)
+            window.removeEventListener("pointermove", this.onPointerMove);
+        if (this.onPointerDown)
+            window.removeEventListener("pointerdown", this.onPointerDown);
+        if (this.onPointerUp)
+            window.removeEventListener("pointerup", this.onPointerUp);
+        if (this.onWheel) window.removeEventListener("wheel", this.onWheel);
         this.keysPressed.clear();
+        this.mouseButtons.clear();
+        this.mousePosition = { x: 0, y: 0 };
+        this.mouseDelta = { x: 0, y: 0 };
+        this.scrollY = 0;
         this.inputManagerEvents.clear();
         runtimeMetrics.clear();
     }

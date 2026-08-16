@@ -47,6 +47,13 @@
     import { performCSG, type CSGOperation } from "$lib/utils/csg";
     import ComponentPropertiesPanel from "$lib/components/editor/sidebar/ComponentPropertiesPanel.svelte";
     import ProgressBar from "$lib/components/editor/ProgressBar.svelte";
+    import AddEntityModal from "$lib/components/editor/AddEntityModal.svelte";
+    import {
+        createCameraHelper,
+        syncCameraHelper,
+        disposeCameraHelper,
+        type CameraHelperEntry,
+    } from "$lib/utils/cameraHelper";
 
     let {
         modelData,
@@ -66,6 +73,8 @@
     // ─── ECS ↔ Three.js sync ────────────────────────────────────────────
     // Maps entity ID → Three.js mesh so we can update/remove meshes when ECS data changes.
     const meshByEntityId = new Map<string, THREE.Mesh>();
+    // Maps entity ID → camera debug helper (frustum + pick body).
+    const cameraHelpers = new Map<string, CameraHelperEntry>();
 
     /** Create the Three.js mesh that corresponds to an ECS Part entity. */
     function createMeshForEntity(entity: Entity): THREE.Mesh | null {
@@ -208,6 +217,27 @@
         createMeshForEntity(entity);
     }
 
+    /** Create a Camera entity in the ECS and spawn its debug helper. */
+    function createCamera() {
+        const camCount = modelData.entities.filter((e) =>
+            e.components.some((c) => c.name === "Camera"),
+        ).length;
+        const entity = ECS.createCameraEntity(`Camera ${camCount + 1}`);
+
+        const transform = entity.components.find(
+            (c) => c.name === "Transform",
+        )!;
+        transform.data.position.value = {
+            x: +(Math.random() * 4 - 2).toFixed(2),
+            y: 1.5,
+            z: +(Math.random() * 4 - 2).toFixed(2),
+        };
+
+        modelData.entities.push(entity);
+        selectedPartIds = [entity.id];
+        selectedFaces = [];
+    }
+
     async function handleSave() {
         // TODO: persist to backend / localStorage
         saved = true;
@@ -224,7 +254,7 @@
         if (entityType === "Part") {
             createPart();
         } else if (entityType === "Camera") {
-            // TODO: createCameraEntity()
+            createCamera();
         } else if (entityType === "Light") {
             // TODO: createLightEntity()
         }
@@ -401,7 +431,9 @@
         // Spawn meshes for all entities
         for (const entity of modelData.entities) {
             if (!meshByEntityId.has(entity.id)) {
-                createMeshForEntity(entity);
+                if (entity.components.some((c) => c.name === "Mesh")) {
+                    createMeshForEntity(entity);
+                }
             }
         }
     });
@@ -482,9 +514,25 @@
         for (const entity of entities) {
             seenIds.add(entity.id);
 
+            // Camera entities render as a debug frustum instead of a mesh.
+            if (entity.components.some((c) => c.name === "Camera")) {
+                let entry: CameraHelperEntry | null | undefined =
+                    cameraHelpers.get(entity.id);
+                if (!entry) {
+                    entry = createCameraHelper(entity, scene);
+                    if (entry) cameraHelpers.set(entity.id, entry);
+                }
+                if (entry && entity.id !== attachedEntityId) {
+                    syncCameraHelper(entry, entity);
+                }
+                continue;
+            }
+
             let mesh = meshByEntityId.get(entity.id);
             if (!mesh) {
-                mesh = createMeshForEntity(entity) ?? undefined;
+                if (entity.components.some((c) => c.name === "Mesh")) {
+                    mesh = createMeshForEntity(entity) ?? undefined;
+                }
             }
 
             if (mesh && entity.id !== attachedEntityId) {
@@ -504,6 +552,14 @@
                     mat.dispose();
                 }
                 meshByEntityId.delete(id);
+            }
+        }
+
+        // Remove camera helpers for entities that no longer exist
+        for (const [id, entry] of cameraHelpers) {
+            if (!seenIds.has(id)) {
+                disposeCameraHelper(entry, scene);
+                cameraHelpers.delete(id);
             }
         }
     });
@@ -558,23 +614,7 @@
 
 <svelte:document onkeydown={handleKeydown} />
 
-<Command.Dialog bind:open={addEntityModalOpen} class="rounded-xl p-5">
-    <Command.Input placeholder="Search for an entity..." />
-    <Command.List class="mt-3">
-        <Command.Empty>No results found.</Command.Empty>
-        <Command.Group heading="Suggestions">
-            <Command.Item onSelect={() => handleEntitySelect("Part")}
-                >Part</Command.Item
-            >
-            <Command.Item onSelect={() => handleEntitySelect("Camera")}
-                >Camera</Command.Item
-            >
-            <Command.Item onSelect={() => handleEntitySelect("Light")}
-                >Light</Command.Item
-            >
-        </Command.Group>
-    </Command.List>
-</Command.Dialog>
+<AddEntityModal bind:open={addEntityModalOpen} onSelect={handleEntitySelect} />
 
 <Command.Dialog bind:open={addComponentModalOpen} class="rounded-xl p-5">
     <Command.Input placeholder="Search for a component..." />
@@ -618,6 +658,9 @@
 
         <div class="min-h-0 flex-1 overflow-auto px-2 py-1">
             {#each modelData.entities as entity (entity.id)}
+                {@const isCamera = entity.components.some(
+                    (c) => c.name === "Camera",
+                )}
                 <div
                     class="group mx-1 flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-sm duration-100 {selectedPartIds.includes(
                         entity.id,
@@ -626,7 +669,11 @@
                         : 'text-foreground hover:bg-muted/60'}"
                     onclick={() => selectedPartIds.push(entity.id)}
                 >
-                    <Boxes class="h-3.5 w-3.5 shrink-0 text-green-500" />
+                    {#if isCamera}
+                        <Camera class="h-3.5 w-3.5 shrink-0 text-green-500" />
+                    {:else}
+                        <Boxes class="h-3.5 w-3.5 shrink-0 text-green-500" />
+                    {/if}
                     <span class="flex-1 truncate">{entity.name}</span>
                     <button
                         class="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 duration-100 group-hover:opacity-100 hover:bg-destructive/15 hover:text-destructive"
