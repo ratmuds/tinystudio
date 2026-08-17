@@ -317,7 +317,7 @@ export class ScriptingSystem extends System {
             function Entity:_findComponent(name)
                 if not self._components then return nil end
                 local len = self._components.length or #self._components
-                for i = 0, len - 1 do
+                for i = 1, len do
                     local comp = self._components[i]
                     if comp and comp.name == name then
                         return comp
