@@ -104,5 +104,23 @@ export class MeshSystem extends System {
         group.userData.entityId = entity.id;
         this.scene.add(group);
         this.groupByEntityId.set(entity.id, group);
+
+        entity.events.on("entity.destroyed", () => {
+            const grp = this.groupByEntityId.get(entity.id);
+            if (grp && this.scene) {
+                this.scene.remove(grp);
+                grp.traverse((child) => {
+                    if (child instanceof THREE.Mesh) {
+                        child.geometry.dispose();
+                        if (Array.isArray(child.material)) {
+                            for (const m of child.material) m.dispose();
+                        } else if (child.material) {
+                            child.material.dispose();
+                        }
+                    }
+                });
+                this.groupByEntityId.delete(entity.id);
+            }
+        });
     }
 }

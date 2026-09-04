@@ -16,6 +16,7 @@
     import { PhysicsSystem } from "$lib/systems/PhysicsSystem.svelte";
     import { ScriptingSystem } from "$lib/systems/ScriptingSystem.svelte";
     import { CameraSystem } from "$lib/systems/CameraSystem.svelte";
+    import { PlayerControllerSystem } from "$lib/systems/PlayerControllerSystem.svelte";
     import { EventEmitter } from "$lib/stores/EventEmitter";
 
     let {
@@ -178,31 +179,27 @@
         runtimeData.gameData.worlds.find((w) => w.id === selectedWorldId),
     );
 
-    // Three.js scene
-    let scene = $derived.by(() => {
-        const s = new THREE.Scene();
-        s.background = new THREE.Color(0x1a1a2e);
-        return s;
-    });
+    // Three.js scene (stable instance with grid, fog, and lights)
+    let scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x1a1a2e);
+    scene.fog = new THREE.Fog(0x1a1a2e, 25, 75);
 
-    let camera = $derived.by(() => {
-        const c = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
-        c.position.set(6, 5, 8);
-        c.lookAt(0, 0, 0);
-        return c;
-    });
+    const grid = new THREE.GridHelper(60, 60, 0x22c55e, 0x2a2a3c);
+    grid.position.y = 0;
+    scene.add(grid);
 
-    // Lights
-    $effect(() => {
-        const ambientLight = new THREE.AmbientLight(0xffffff, 1.6);
-        scene.add(ambientLight);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.6);
+    scene.add(ambientLight);
 
-        const dirLight = new THREE.DirectionalLight(0xffffff, 2.5);
-        dirLight.position.set(5, 10, 5);
-        dirLight.castShadow = true;
-        dirLight.shadow.mapSize.set(1024, 1024);
-        scene.add(dirLight);
-    });
+    const dirLight = new THREE.DirectionalLight(0xffffff, 2.5);
+    dirLight.position.set(5, 10, 5);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.set(1024, 1024);
+    scene.add(dirLight);
+
+    let camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+    camera.position.set(6, 5, 8);
+    camera.lookAt(0, 0, 0);
 
     function gameLoop(time: number) {
         if (!isRunning) return;
@@ -251,12 +248,15 @@
         }
 
         // Create and register systems
-        // Order: scripting (writes transforms) → physics (syncs bodies, steps sim) → mesh (reads transforms)
+        // Order: scripting (writes transforms) → player controller (reads input, sets velocities) → physics (syncs bodies, steps sim) → mesh (reads transforms) → camera (follows)
         const scriptingSystem = new ScriptingSystem(
             scene,
             runtimeData.gameData,
         );
         runtimeData.systems = [scriptingSystem];
+
+        const playerControllerSystem = new PlayerControllerSystem(camera);
+        runtimeData.systems.push(playerControllerSystem);
 
         const physicsSystem = new PhysicsSystem(scene, runtimeData.gameData);
         runtimeData.systems.push(physicsSystem);
@@ -273,8 +273,11 @@
             await system.setup(runtimeEntities);
         }
 
-        // Kick off scripts for entities with Script components
+        // Kick off scripts and wire destruction for runtime entities
         for (const entity of runtimeEntities) {
+            entity.events.on("entity.destroyed", () => {
+                runtimeEntities = runtimeEntities.filter((e) => e.id !== entity.id);
+            });
             const hasScript = entity.components.some((c) => c.name === "Script");
             if (hasScript) {
                 scriptingSystem.startScript(entity);
@@ -392,6 +395,46 @@
                     orbitControls={false}
                     bind:domElement
                 />
+
+                {#if isRunning}
+                    <!-- Screen UI Overlay -->
+                    <div class="pointer-events-none absolute inset-0 z-20 overflow-hidden select-none">
+                        {#each runtimeEntities as entity (entity.id)}
+                            {@const uiComp = entity.components.find((c) => c.name === "UI")}
+                            {#if uiComp && uiComp.data.visible?.value !== false}
+                                {@const type = uiComp.data.type?.value ?? "button"}
+                                {@const text = String(uiComp.data.text?.value ?? "")}
+                                {@const x = Number(uiComp.data.x?.value ?? 20)}
+                                {@const y = Number(uiComp.data.y?.value ?? 20)}
+                                {@const w = Number(uiComp.data.width?.value ?? 120)}
+                                {@const h = Number(uiComp.data.height?.value ?? 40)}
+                                {@const color = String(uiComp.data.color?.value ?? "#ffffff")}
+                                {@const bg = String(uiComp.data.backgroundColor?.value ?? (type === "button" ? "#22c55e" : "transparent"))}
+                                {@const size = Number(uiComp.data.fontSize?.value ?? 14)}
+                                {#if type === "button"}
+                                    <button
+                                        type="button"
+                                        class="pointer-events-auto absolute flex items-center justify-center rounded-lg font-semibold shadow-md transition-all duration-100 hover:brightness-110 active:scale-95 cursor-pointer"
+                                        style="left: {x}px; top: {y}px; width: {w}px; height: {h}px; color: {color}; background-color: {bg}; font-size: {size}px;"
+                                        onclick={() => {
+                                            entity.events.emit("UI.click", entity);
+                                            entity.events.emit("click", entity);
+                                        }}
+                                    >
+                                        {text}
+                                    </button>
+                                {:else}
+                                    <div
+                                        class="pointer-events-none absolute flex items-center font-medium"
+                                        style="left: {x}px; top: {y}px; width: {w}px; height: {h}px; color: {color}; background-color: {bg}; font-size: {size}px;"
+                                    >
+                                        {text}
+                                    </div>
+                                {/if}
+                            {/if}
+                        {/each}
+                    </div>
+                {/if}
 
                 {#if !isRunning}
                     <div class="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/25 backdrop-blur-[1px]">

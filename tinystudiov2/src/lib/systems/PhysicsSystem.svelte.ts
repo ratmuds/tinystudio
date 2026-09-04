@@ -346,6 +346,59 @@ export class PhysicsSystem extends System {
                 this.joltConstraints.push(constraint);
             }
         }
+
+        // Attach dynamic impulse, velocity, lock-rotation, and body destruction listeners
+        for (const entity of this.entities) {
+            entity.events.on("Physics.applyImpulse", (data: any) => {
+                const bodyID = this.bodyByEntityId.get(entity.id);
+                if (bodyID && this.bodyInterface && this.jolt && data) {
+                    this.bodyInterface.ActivateBody(bodyID);
+                    const impulse = new this.jolt.Vec3(
+                        data.x || 0,
+                        data.y || 0,
+                        data.z || 0,
+                    );
+                    this.bodyInterface.AddImpulse(bodyID, impulse);
+                    this.jolt.destroy(impulse);
+                }
+            });
+            entity.events.on("Physics.setVelocity", (data: any) => {
+                const bodyID = this.bodyByEntityId.get(entity.id);
+                if (bodyID && this.bodyInterface && this.jolt && data) {
+                    this.bodyInterface.ActivateBody(bodyID);
+                    let targetY = data.y || 0;
+                    if (data.preserveY) {
+                        const currentVel =
+                            this.bodyInterface.GetLinearVelocity(bodyID);
+                        targetY = currentVel.GetY();
+                    }
+                    const vel = new this.jolt.Vec3(
+                        data.x || 0,
+                        targetY,
+                        data.z || 0,
+                    );
+                    this.bodyInterface.SetLinearVelocity(bodyID, vel);
+                    this.jolt.destroy(vel);
+                }
+            });
+            entity.events.on("Physics.lockRotation", () => {
+                const bodyID = this.bodyByEntityId.get(entity.id);
+                if (bodyID && this.bodyInterface && this.jolt) {
+                    const zero = new this.jolt.Vec3(0, 0, 0);
+                    this.bodyInterface.SetAngularVelocity(bodyID, zero);
+                    this.jolt.destroy(zero);
+                }
+            });
+            entity.events.on("Physics.destroyBody", () => {
+                const bodyID = this.bodyByEntityId.get(entity.id);
+                if (bodyID && this.bodyInterface) {
+                    this.bodyInterface.RemoveBody(bodyID);
+                    this.bodyInterface.DestroyBody(bodyID);
+                    this.bodyByEntityId.delete(entity.id);
+                    this.joltBodyByEntityId.delete(entity.id);
+                }
+            });
+        }
     }
 
     update(_deltaTime: number, entities: Entity[]): void {

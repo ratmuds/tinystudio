@@ -85,23 +85,30 @@ export class ScriptData {
     // metadata (language, enabled, etc.) can be added per-block later.
     scriptData: any[] = $state([
         {
-            code: `function wait(seconds)
-    coroutine.yield(seconds or 0)
-end
+            code: `-- Welcome to TinyStudio!
+-- 'this' (or 'entity') is automatically bound to this entity.
+-- 'Transform', 'Physics', 'UI', 'Input', and 'wait()' are globally available.
 
-function gameLoop()
-    local frameCount = 0
+print("Starting script on:", entity and entity.name or "World")
 
-    while true do
-        frameCount = frameCount + 1
+-- Example: Listen to UI button click
+UI.onClick("UIButton 1", function()
+    print("UI Button was clicked!")
+    UI.setText("UIButton 1", "Clicked!")
+end)
 
-        print("Frame:", frameCount)
+-- Example game loop
+local count = 0
+while true do
+    wait(1)
+    count = count + 1
+    print("Seconds active:", count)
 
-        wait(1)
+    -- If this entity has a Transform, gently spin it
+    if Transform then
+        Transform.rotation.y = Transform.rotation.y + 0.1
     end
-end
-
-mainThread = coroutine.create(gameLoop)`,
+end`,
         },
     ]);
 

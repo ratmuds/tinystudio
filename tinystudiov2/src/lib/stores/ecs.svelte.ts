@@ -6,7 +6,9 @@ type BaseEntityType =
     | "light"
     | "camera"
     | "constraint"
-    | "custom";
+    | "custom"
+    | "ui"
+    | "player";
 
 class Entity {
     id: string = $state("");
@@ -139,6 +141,11 @@ function createPhysicsComponent(): Component {
             "boolean",
             false,
             "Whether the entity is anchored in place and does not move",
+        ),
+        mass: makeEntry(
+            "number",
+            1,
+            "Mass of the rigid body in kg",
         ),
         customCollider: makeEntry(
             "model",
@@ -317,6 +324,79 @@ function createCameraEntity(name: string = "Camera"): Entity {
     return e;
 }
 
+function createUIComponent(type: "button" | "text" = "button"): Component {
+    const c = new Component();
+    c.id = crypto.randomUUID();
+    c.name = "UI";
+    c.tooltip = "Screen UI element rendered directly over the game viewport";
+    c.data = {
+        type: makeEntry("string", type, "UI element type: button or text"),
+        text: makeEntry("string", type === "button" ? "Click Me" : "Sample Text", "Displayed text"),
+        x: makeEntry("number", 20, "X position in pixels from the left"),
+        y: makeEntry("number", 20, "Y position in pixels from the top"),
+        width: makeEntry("number", type === "button" ? 120 : 200, "Width in pixels"),
+        height: makeEntry("number", type === "button" ? 40 : 32, "Height in pixels"),
+        color: makeEntry("color", "#ffffff", "Text color"),
+        backgroundColor: makeEntry("color", type === "button" ? "#22c55e" : "#1c1c1c", "Background color"),
+        fontSize: makeEntry("number", 14, "Font size in pixels"),
+        visible: makeEntry("boolean", true, "Whether this UI element is visible"),
+    };
+    return c;
+}
+
+function createUIEntity(name: string = "UI Element", type: "button" | "text" = "button"): Entity {
+    const e = new Entity();
+    e.id = crypto.randomUUID();
+    e.name = name;
+    e.baseEntity = "ui";
+    e.components = [createUIComponent(type)];
+    e.events = new EventEmitter();
+    return e;
+}
+
+function createPlayerControllerComponent(): Component {
+    const c = new Component();
+    c.id = crypto.randomUUID();
+    c.name = "PlayerController";
+    c.tooltip = "Keyboard movement and jump controller for playable entities";
+    c.data = {
+        speed: makeEntry("number", 8, "Movement speed in units per second"),
+        jumpForce: makeEntry("number", 9, "Upward jump impulse velocity"),
+        airControl: makeEntry("number", 0.6, "Air movement multiplier while jumping"),
+        enabled: makeEntry("boolean", true, "Whether player input controls this entity"),
+    };
+    return c;
+}
+
+function createPlayerEntity(name: string = "Player"): Entity {
+    const e = new Entity();
+    e.id = crypto.randomUUID();
+    e.name = name;
+    e.baseEntity = "player";
+
+    // Transform (centered, slightly elevated)
+    const transform = createTransformComponent();
+    transform.data.position.value = { x: 0, y: 1.5, z: 0 };
+
+    // Mesh: Cyan/Blue Player Avatar Cylinder
+    const mesh = createMeshComponent();
+    mesh.data.geometryType.value = "cylinder";
+    mesh.data.size.value = { x: 0.8, y: 1.8, z: 0.8 };
+    mesh.data.color.value = 0x0ea5e9; // Vibrant sky-blue avatar
+
+    // Physics: dynamic body with mass
+    const physics = createPhysicsComponent();
+    if (physics.data.anchored) physics.data.anchored.value = false;
+    if (physics.data.mass) physics.data.mass.value = 70;
+
+    // PlayerController
+    const controller = createPlayerControllerComponent();
+
+    e.components = [transform, mesh, physics, controller];
+    e.events = new EventEmitter();
+    return e;
+}
+
 export {
     type BaseEntityType,
     Entity,
@@ -335,4 +415,8 @@ export {
     createConstraintEntity,
     createCameraComponent,
     createCameraEntity,
+    createUIComponent,
+    createUIEntity,
+    createPlayerControllerComponent,
+    createPlayerEntity,
 };

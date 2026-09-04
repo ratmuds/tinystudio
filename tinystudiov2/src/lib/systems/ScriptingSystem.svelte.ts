@@ -234,6 +234,15 @@ export class ScriptingSystem extends System {
                 self.z = math.cos(yaw) * lenXZ
                 return self
             end
+
+            Vector3.zero = Vector3.new(0, 0, 0)
+            Vector3.one = Vector3.new(1, 1, 1)
+            Vector3.up = Vector3.new(0, 1, 0)
+            Vector3.down = Vector3.new(0, -1, 0)
+            Vector3.right = Vector3.new(1, 0, 0)
+            Vector3.left = Vector3.new(-1, 0, 0)
+            Vector3.forward = Vector3.new(0, 0, -1)
+            Vector3.back = Vector3.new(0, 0, 1)
         `);
 
         // 1b. Vector2 Metatable
@@ -314,6 +323,33 @@ export class ScriptingSystem extends System {
                 end)
             end
 
+            function __createLiveVector3(entry)
+                local v = {
+                    x = entry.value.x or 0,
+                    y = entry.value.y or 0,
+                    z = entry.value.z or 0
+                }
+                local mt = {
+                    __index = function(t, k)
+                        if Vector3[k] then return Vector3[k] end
+                        return rawget(t, k)
+                    end,
+                    __newindex = function(t, k, val)
+                        rawset(t, k, val)
+                        if k == "x" or k == "y" or k == "z" then
+                            entry.value[k] = val
+                            entry.dirty = true
+                        end
+                    end,
+                    __tostring = Vector3.__tostring,
+                    __add = Vector3.__add,
+                    __sub = Vector3.__sub,
+                    __mul = Vector3.__mul,
+                    __div = Vector3.__div,
+                }
+                return setmetatable(v, mt)
+            end
+
             function Entity:_findComponent(name)
                 if not self._components then return nil end
                 local len = self._components.length or #self._components
@@ -327,7 +363,7 @@ export class ScriptingSystem extends System {
             end
 
             function Component:__index(key)
-                if key == "on" or key == "off" or key == "emit" then
+                if key == "on" or key == "off" or key == "emit" or key == "applyImpulse" or key == "setVelocity" then
                     return rawget(Component, key)
                 end
 
@@ -335,11 +371,10 @@ export class ScriptingSystem extends System {
                 local entry = comp.data[key]
                 if not entry then return nil end
 
-                if entry.type == "string" or entry.type == "number" or entry.type == "boolean" then
+                if entry.type == "string" or entry.type == "number" or entry.type == "boolean" or entry.type == "color" then
                     return entry.value
                 elseif entry.type == "vector3" then
-                    local value = entry.value
-                    return Vector3.new(value.x, value.y, value.z)
+                    return __createLiveVector3(entry)
                 else
                     __warnUnsupportedComponentData(comp.name, key, entry.type)
                     return nil
@@ -354,9 +389,8 @@ export class ScriptingSystem extends System {
                     return
                 end
 
-                if entry.type == "string" then
-                    if type(value) ~= "string" then return end
-                    entry.value = value
+                if entry.type == "string" or entry.type == "color" then
+                    entry.value = tostring(value)
                     entry.dirty = true
                 elseif entry.type == "number" then
                     if type(value) ~= "number" then return end
@@ -376,6 +410,26 @@ export class ScriptingSystem extends System {
                     entry.dirty = true
                 else
                     __warnUnsupportedComponentData(comp.name, key, entry.type)
+                end
+            end
+
+            function Component:applyImpulse(x, y, z)
+                local entity = rawget(self, "_entity")
+                if not entity then return end
+                if type(x) == "table" then
+                    __entityEmit(entity.id, "Physics.applyImpulse", { x = x.x or 0, y = x.y or 0, z = x.z or 0 })
+                else
+                    __entityEmit(entity.id, "Physics.applyImpulse", { x = x or 0, y = y or 0, z = z or 0 })
+                end
+            end
+
+            function Component:setVelocity(x, y, z)
+                local entity = rawget(self, "_entity")
+                if not entity then return end
+                if type(x) == "table" then
+                    __entityEmit(entity.id, "Physics.setVelocity", { x = x.x or 0, y = x.y or 0, z = x.z or 0 })
+                else
+                    __entityEmit(entity.id, "Physics.setVelocity", { x = x or 0, y = y or 0, z = z or 0 })
                 end
             end
 
@@ -429,6 +483,10 @@ export class ScriptingSystem extends System {
                 __entityOff(self.id, listenerId)
             end
 
+            function Entity:destroy()
+                __destroyEntityJS(self.id)
+            end
+
             function Entity:emit(eventName, ...)
                 __entityEmit(self.id, eventName, ...)
             end
@@ -469,6 +527,35 @@ export class ScriptingSystem extends System {
                     return getEntityById(id)
                 end
             }
+
+            Input = game.inputManager
+            Input.isKeyDown = function(keyCode) return __isKeyPressedJS(keyCode) end
+
+            function wait(seconds)
+                coroutine.yield(seconds or 0)
+            end
+
+            UI = {
+                setText = function(target, text)
+                    return __uiSetPropertyJS(target, "text", tostring(text))
+                end,
+                getText = function(target)
+                    return __uiGetPropertyJS(target, "text") or ""
+                end,
+                setColor = function(target, color)
+                    return __uiSetPropertyJS(target, "color", tostring(color))
+                end,
+                setBackgroundColor = function(target, color)
+                    return __uiSetPropertyJS(target, "backgroundColor", tostring(color))
+                end,
+                setVisible = function(target, visible)
+                    return __uiSetPropertyJS(target, "visible", visible and true or false)
+                end,
+                onClick = function(target, callback)
+                    local callbackId = __registerEventCallback(callback)
+                    return __uiOnClickJS(target, callbackId)
+                end
+            }
         `);
 
         // 3. JS Data Fetching Helpers (pure functions, no Lua re-entry)
@@ -498,6 +585,15 @@ export class ScriptingSystem extends System {
 
         lua.global.set("__getScrollJS", () => {
             return this.scrollY;
+        });
+
+        lua.global.set("__destroyEntityJS", (id: string) => {
+            const entity = this.entities.find((e) => e.id === id);
+            if (entity) {
+                entity.events.emit("Physics.destroyBody");
+                entity.events.emit("entity.destroyed");
+            }
+            this.entities = this.entities.filter((e) => e.id !== id);
         });
 
         // Camera selection. The active camera is the entity with a Camera
@@ -594,6 +690,59 @@ export class ScriptingSystem extends System {
             },
         );
 
+        // UI Helpers
+        lua.global.set(
+            "__uiSetPropertyJS",
+            (targetNameOrId: string, prop: string, val: any) => {
+                const entity = this.entities.find(
+                    (e) => e.id === targetNameOrId || e.name === targetNameOrId,
+                );
+                if (!entity) return false;
+                const uiComp = entity.components.find((c) => c.name === "UI");
+                if (!uiComp || !uiComp.data[prop]) return false;
+                uiComp.data[prop].value = val;
+                uiComp.data[prop].dirty = true;
+                return true;
+            },
+        );
+
+        lua.global.set(
+            "__uiGetPropertyJS",
+            (targetNameOrId: string, prop: string) => {
+                const entity = this.entities.find(
+                    (e) => e.id === targetNameOrId || e.name === targetNameOrId,
+                );
+                if (!entity) return null;
+                const uiComp = entity.components.find((c) => c.name === "UI");
+                if (!uiComp || !uiComp.data[prop]) return null;
+                return uiComp.data[prop].value;
+            },
+        );
+
+        lua.global.set(
+            "__uiOnClickJS",
+            (targetNameOrId: string, callbackId: string) => {
+                const entity = this.entities.find(
+                    (e) => e.id === targetNameOrId || e.name === targetNameOrId,
+                );
+                if (!entity) return undefined;
+                const dispatch = (...args: any[]) => {
+                    this.dispatchCallback(
+                        scope,
+                        callbackId,
+                        args,
+                        `${entity.name}.UI.click`,
+                    );
+                };
+                const listenerId = entity.events.on("UI.click", dispatch, scope);
+                scope.registrations.push({
+                    emitter: entity.events,
+                    listenerId,
+                });
+                return listenerId;
+            },
+        );
+
         // 4. Native Lua constructors for Entities (attaches Entity metatable directly in Lua)
         lua.doStringSync(`
             function getEntityById(id)
@@ -655,6 +804,11 @@ export class ScriptingSystem extends System {
         this.registerGlobals(lua, stateScope);
 
         const wrappedCode = `local mainThread = coroutine.create(function()
+            this = getEntityById("${entity.id}")
+            entity = this
+            Transform = this and this.Transform
+            Physics = this and this.Physics
+            UIComp = this and this.UI
             ${code}
         end)
         return mainThread`;

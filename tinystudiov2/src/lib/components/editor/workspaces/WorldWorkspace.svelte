@@ -21,6 +21,8 @@
         CornerDownRight,
         SquaresUnite,
         Camera,
+        Layout,
+        Gamepad2,
     } from "@lucide/svelte";
 
     import { GameData, WorldData, ModelData } from "$lib/stores/data.svelte";
@@ -364,11 +366,48 @@
         selectedPartIds = [entity.id];
     }
 
+    /** Spawn a UI entity directly into the world. */
+    function spawnUIEntity(type: "button" | "text") {
+        const count = worldData.entities.filter((e) =>
+            e.components.some((c) => c.name === "UI"),
+        ).length;
+        const name =
+            type === "button" ? `UIButton ${count + 1}` : `UIText ${count + 1}`;
+        const entity = ECS.createUIEntity(name, type);
+        worldData.entities.push(entity);
+        selectedPartIds = [entity.id];
+    }
+
+    /** Spawn a Player entity directly into the world. */
+    function spawnPlayer() {
+        const playerCount = worldData.entities.filter((e) =>
+            e.components.some((c) => c.name === "PlayerController"),
+        ).length;
+        const entity = ECS.createPlayerEntity(`Player ${playerCount + 1}`);
+        const transform = entity.components.find(
+            (c) => c.name === "Transform",
+        )!;
+        transform.data.position.value = {
+            x: 0,
+            y: 1.5,
+            z: 0,
+        };
+
+        worldData.entities.push(entity);
+        selectedPartIds = [entity.id];
+    }
+
     function handleEntitySelect(entityType: string) {
         if (entityType === "Part") {
             spawnPart();
+        } else if (entityType === "Player") {
+            spawnPlayer();
         } else if (entityType === "Camera") {
             spawnCamera();
+        } else if (entityType === "UI Button") {
+            spawnUIEntity("button");
+        } else if (entityType === "UI Text") {
+            spawnUIEntity("text");
         } else if (entityType === "Light") {
             // TODO: createLightEntity()
         }
@@ -622,8 +661,14 @@
 
             <div class="min-h-0 flex-1 overflow-auto px-2 py-1">
                 {#each worldData.entities as entity (entity.id)}
+                    {@const isPlayer = entity.components.some(
+                        (c) => c.name === "PlayerController",
+                    )}
                     {@const isCamera = entity.components.some(
                         (c) => c.name === "Camera",
+                    )}
+                    {@const isUI = entity.components.some(
+                        (c) => c.name === "UI",
                     )}
                     <div
                         class="group mx-1 flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-sm duration-100 {selectedPartIds.includes(
@@ -633,8 +678,16 @@
                             : 'text-foreground hover:bg-muted/60'}"
                         onclick={() => (selectedPartIds = [entity.id])}
                     >
-                        {#if isCamera}
+                        {#if isPlayer}
+                            <Gamepad2
+                                class="h-3.5 w-3.5 shrink-0 text-green-500"
+                            />
+                        {:else if isCamera}
                             <Camera
+                                class="h-3.5 w-3.5 shrink-0 text-green-500"
+                            />
+                        {:else if isUI}
+                            <Layout
                                 class="h-3.5 w-3.5 shrink-0 text-green-500"
                             />
                         {:else}

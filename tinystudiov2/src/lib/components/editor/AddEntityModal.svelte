@@ -16,9 +16,10 @@
         <Command.Empty>No results found.</Command.Empty>
         <Command.Group heading="Suggestions">
             <Command.Item onSelect={() => onSelect?.("Part")}>Part</Command.Item>
-            <Command.Item onSelect={() => onSelect?.("Camera")}
-                >Camera</Command.Item
-            >
+            <Command.Item onSelect={() => onSelect?.("Player")}>Player</Command.Item>
+            <Command.Item onSelect={() => onSelect?.("Camera")}>Camera</Command.Item>
+            <Command.Item onSelect={() => onSelect?.("UI Button")}>UI Button</Command.Item>
+            <Command.Item onSelect={() => onSelect?.("UI Text")}>UI Text</Command.Item>
         </Command.Group>
     </Command.List>
 </Command.Dialog>

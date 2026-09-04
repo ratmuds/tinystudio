@@ -5,7 +5,7 @@ import { FlyControls } from "three/addons/controls/FlyControls.js";
 import { System, type Component, type Entity } from "$lib/stores/ecs.svelte";
 import type { GameData } from "$lib/stores/data.svelte";
 
-type CameraMode = "fixed" | "orbit" | "firstPerson" | "fly";
+type CameraMode = "fixed" | "orbit" | "firstPerson" | "fly" | "follow";
 
 export class CameraSystem extends System {
     private scene: THREE.Scene | null = null;
@@ -45,7 +45,35 @@ export class CameraSystem extends System {
         if (!this.camera) return;
 
         const cam = this.findActiveCamera(entities);
-        if (!cam) return;
+        if (!cam) {
+            // If no camera entity exists, check if there is a Player entity to follow
+            const player = entities.find((e) =>
+                e.components.some((c) => c.name === "PlayerController"),
+            );
+            if (player) {
+                const pt = player.components.find((c) => c.name === "Transform");
+                if (pt) {
+                    const p = pt.data.position.value as {
+                        x: number;
+                        y: number;
+                        z: number;
+                    };
+                    const desired = new THREE.Vector3(
+                        p.x,
+                        p.y + 3.5,
+                        p.z + 6.5,
+                    );
+                    this.camera.position.lerp(desired, 0.08);
+                    this.camera.lookAt(p.x, p.y + 1.2, p.z);
+                    return;
+                }
+            }
+            if (this.orbitControls) {
+                this.orbitControls.enabled = true;
+                this.orbitControls.update(_deltaTime);
+            }
+            return;
+        }
 
         const cameraComp = cam.components.find((c) => c.name === "Camera");
         const transformComp = cam.components.find(
@@ -77,6 +105,33 @@ export class CameraSystem extends System {
         if (mode === "fixed") {
             this.applyTransformToCamera(transformComp);
             this.camera.lookAt(target.x, target.y, target.z);
+        } else if (mode === "follow") {
+            const player = entities.find(
+                (e) =>
+                    e.components.some(
+                        (c) => c.name === "PlayerController",
+                    ) || e.name === "Player",
+            );
+            if (player) {
+                const pt = player.components.find((c) => c.name === "Transform");
+                if (pt) {
+                    const p = pt.data.position.value as {
+                        x: number;
+                        y: number;
+                        z: number;
+                    };
+                    const desired = new THREE.Vector3(
+                        p.x,
+                        p.y + 3.5,
+                        p.z + 6.5,
+                    );
+                    this.camera.position.lerp(desired, 0.08);
+                    this.camera.lookAt(p.x, p.y + 1.2, p.z);
+                }
+            } else {
+                this.applyTransformToCamera(transformComp);
+                this.camera.lookAt(target.x, target.y, target.z);
+            }
         } else if (mode === "orbit") {
             if (this.orbitControls) {
                 this.orbitControls.target.set(target.x, target.y, target.z);
