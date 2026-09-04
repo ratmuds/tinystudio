@@ -261,7 +261,7 @@
             const obj = findPartById(ids[0]);
             if (obj) {
                 transformControls.attach(obj);
-                const modeMap = {
+                const modeMap: Record<string, "translate" | "rotate" | "scale"> = {
                     move: "translate",
                     rotate: "rotate",
                     scale: "scale",

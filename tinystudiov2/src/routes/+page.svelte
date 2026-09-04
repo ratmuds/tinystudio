@@ -147,6 +147,11 @@
     }
 
     function openTestTab() {
+        const existing = tabs.find((t) => t.kind === "test");
+        if (existing) {
+            activeTab = existing.id;
+            return;
+        }
         const tab: StudioTab = {
             id: crypto.randomUUID(),
             name: "Test Tab",
@@ -155,7 +160,9 @@
             dataId: "",
         };
         tabs.push(tab);
+        activeTab = tab.id;
     }
+
 
     function createNewWorld(name?: string) {
         const world = new WorldData();
@@ -277,8 +284,10 @@
             if (kind === "model") createNewModel();
             else if (kind === "world") createNewWorld();
             else if (kind === "script") createNewScript();
+            else if (kind === "test") openTestTab();
         }
     }
+
 
     let addTabTypeModalOpen = $state(false);
     let addTabDataModalOpen = $state(false);
@@ -411,7 +420,9 @@
         {saved}
         {saving}
         onsave={triggerSave}
+        onplay={() => switchWorkspace("test")}
     />
+
 
     <TabBar
         bind:tabs

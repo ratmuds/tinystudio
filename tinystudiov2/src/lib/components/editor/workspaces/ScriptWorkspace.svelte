@@ -65,8 +65,8 @@
 
     $effect(() => {
         scriptData.stateData = {
-            nodes: nodes.map(({ id, type, position, data }) => ({ id, type, position, data })),
-            edges: edges.map(({ id, source, sourceHandle, target, targetHandle }) => ({ id, source, sourceHandle, target, targetHandle })),
+            nodes: nodes.map((n: any) => ({ id: n.id, type: n.type, position: n.position, data: n.data })),
+            edges: edges.map((e: any) => ({ id: e.id, source: e.source, sourceHandle: e.sourceHandle, target: e.target, targetHandle: e.targetHandle })),
         };
     });
 
@@ -281,9 +281,7 @@
                                     bind:value={
                                         scriptData.scriptData[activeBlockIndex].code
                                     }
-                                    theme={mode.current === "dark"
-                                        ? "dark"
-                                        : "light"}
+                                    theme="dark"
                                 />
                             {/key}
                         {/if}

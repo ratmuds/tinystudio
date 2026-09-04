@@ -1,6 +1,7 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import type { editor } from "monaco-editor";
+    import EditorWorker from "monaco-editor/editor/editor.worker?worker";
     import ProgressBar from "$lib/components/editor/ProgressBar.svelte";
 
     let {
@@ -20,12 +21,14 @@
     let isUpdatingFromEditor = false;
     let loaded = $state(false);
 
-    // @ts-ignore
-    self.MonacoEnvironment = {
-        getWorker(_workerId: string, _label: string) {
-            return new EditorWorker();
-        },
-    };
+    if (typeof window !== "undefined") {
+        // @ts-ignore
+        self.MonacoEnvironment = {
+            getWorker() {
+                return new EditorWorker();
+            },
+        };
+    }
 
     function registerLuau(monaco: typeof import("monaco-editor")) {
         monaco.languages.register({ id: "luau" });
@@ -177,10 +180,13 @@
         });
     }
 
-    onMount(async () => {
-        const monaco = await import("monaco-editor");
+    onMount(() => {
+        let resizeObserver: ResizeObserver | undefined;
 
-        registerLuau(monaco);
+        (async () => {
+            const monaco = await import("monaco-editor");
+
+            registerLuau(monaco);
 
         monaco.editor.defineTheme("tinystudio-dark", {
             base: "vs-dark",
@@ -364,15 +370,16 @@
             isUpdatingFromEditor = false;
         });
 
-        loaded = true;
+            loaded = true;
 
-        const resizeObserver = new ResizeObserver(() => {
-            editorInstance?.layout();
-        });
-        resizeObserver.observe(container);
+            resizeObserver = new ResizeObserver(() => {
+                editorInstance?.layout();
+            });
+            if (container) resizeObserver.observe(container);
+        })();
 
         return () => {
-            resizeObserver.disconnect();
+            resizeObserver?.disconnect();
             editorInstance?.dispose();
         };
     });

@@ -275,6 +275,32 @@
         addComponentModalOpen = false;
     }
 
+    function deleteEntity(entityId: string) {
+        const idx = modelData.entities.findIndex((e) => e.id === entityId);
+        if (idx !== -1) {
+            modelData.entities.splice(idx, 1);
+        }
+        const mesh = meshByEntityId.get(entityId);
+        if (mesh) {
+            scene.remove(mesh);
+            mesh.geometry.dispose();
+            const mat = mesh.material;
+            if (Array.isArray(mat)) {
+                for (const m of mat) m.dispose();
+            } else if (mat) {
+                mat.dispose();
+            }
+            meshByEntityId.delete(entityId);
+        }
+        const helper = cameraHelpers.get(entityId);
+        if (helper) {
+            disposeCameraHelper(helper, scene);
+            cameraHelpers.delete(entityId);
+        }
+        selectedPartIds = selectedPartIds.filter((id) => id !== entityId);
+        selectedFaces = selectedFaces.filter((f) => f.entityId !== entityId);
+    }
+
     // ─── CSG (constructive solid geometry) ───────────────────────────────
     let csgOperationModalOpen = $state(false);
     let csgBusy = $state(false);
@@ -352,7 +378,7 @@
         const tag = (e.target as HTMLElement)?.tagName;
         if (tag === "INPUT" || tag === "TEXTAREA") return;
 
-        if (e.key === "a" && (e.metaKey || e.ctrlKey)) {
+        if ((e.key === "a" || e.key === "A") && (e.metaKey || e.ctrlKey || e.shiftKey)) {
             e.preventDefault();
             addEntityModalOpen = !addEntityModalOpen;
         }
@@ -654,6 +680,14 @@
             >
                 Model Objects
             </h2>
+            <button
+                onclick={() => (addEntityModalOpen = true)}
+                class="rounded-md p-1.5 text-muted-foreground duration-150 hover:bg-muted/60 hover:text-green-500 active:scale-90"
+                aria-label="Add entity"
+                title="Add Entity (Shift+A)"
+            >
+                <Plus class="h-4 w-4" />
+            </button>
         </div>
 
         <div class="min-h-0 flex-1 overflow-auto px-2 py-1">
@@ -667,7 +701,7 @@
                     )
                         ? 'bg-green-500/10 text-green-500'
                         : 'text-foreground hover:bg-muted/60'}"
-                    onclick={() => selectedPartIds.push(entity.id)}
+                    onclick={() => (selectedPartIds = [entity.id])}
                 >
                     {#if isCamera}
                         <Camera class="h-3.5 w-3.5 shrink-0 text-green-500" />
@@ -679,6 +713,7 @@
                         class="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 duration-100 group-hover:opacity-100 hover:bg-destructive/15 hover:text-destructive"
                         onclick={(e) => {
                             e.stopPropagation();
+                            deleteEntity(entity.id);
                         }}
                         aria-label="Delete entity"
                     >
@@ -1034,14 +1069,12 @@
                     >{saved ? "Saved!" : "Save Model"}</button
                 >
             {:else}
-                {#each selectedPartIds as partId}
-                    <ComponentPropertiesPanel
-                        components={getSelectedPartComponents()}
-                        scripts={gameData.scripts}
-                        showAddButton={true}
-                        onAddComponent={() => (addComponentModalOpen = true)}
-                    />
-                {/each}
+                <ComponentPropertiesPanel
+                    components={getSelectedPartComponents()}
+                    scripts={gameData.scripts}
+                    showAddButton={true}
+                    onAddComponent={() => (addComponentModalOpen = true)}
+                />
             {/if}
         </div>
     </Resizable.Pane>

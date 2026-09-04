@@ -21,12 +21,14 @@
         saved,
         saving,
         onsave,
+        onplay,
     }: {
         menus: Record<string, MenuItem[]>;
         activeWorkspace: WorkspaceKind;
         saved: boolean;
         saving: boolean;
         onsave: () => void;
+        onplay?: () => void;
     } = $props();
 
     let openMenu = $state<string | null>(null);
@@ -155,8 +157,8 @@
         <Tooltip.Provider>
             <Tooltip.Root>
                 <Tooltip.Trigger
-                    onclick={onsave}
-                    class="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-all duration-150 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:bg-muted/60 hover:text-foreground active:scale-95"
+                    onclick={() => alert("Project saving is unavailable in the demo version")}
+                    class="flex cursor-not-allowed items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground/60 opacity-60 transition-all active:scale-95"
                     aria-label="Save status"
                 >
                     {#if saving}
@@ -279,8 +281,8 @@
             <Tooltip.Root>
                 <Tooltip.Trigger
                     onclick={() => {
-                        onsave();
                         shine("play");
+                        onplay?.();
                     }}
                     class="group relative flex items-center gap-1.5 overflow-hidden rounded-md bg-gradient-to-b from-green-500 to-green-600 px-3.5 py-1.5 text-sm font-bold text-white shadow-sm transition-[transform,background-color,box-shadow] duration-150 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:from-green-400 hover:to-green-500 hover:shadow-md active:scale-95"
                 >

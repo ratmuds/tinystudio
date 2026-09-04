@@ -136,8 +136,11 @@
             if (!container) return;
             const w = container.clientWidth;
             const h = container.clientHeight;
-            if (w === 0 || h === 0) return;
-            camera.aspect = w / h;
+            const aspect = w / h;
+            camera.left = -aspect;
+            camera.right = aspect;
+            camera.top = 1;
+            camera.bottom = -1;
             camera.updateProjectionMatrix();
             const rw = Math.max(1, Math.floor(w / PIXEL_SCALE));
             const rh = Math.max(1, Math.floor(h / PIXEL_SCALE));

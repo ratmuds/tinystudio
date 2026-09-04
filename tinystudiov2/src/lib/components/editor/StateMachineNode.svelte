@@ -15,12 +15,18 @@
 
     const getLogicFiles: () => any[] = getContext("logicFiles");
 
-    let handles = $derived(data.handles ?? []);
+    interface HandleItem {
+        id: string;
+        label: string;
+    }
+
+    let handles = $derived<HandleItem[]>(((data as any)?.handles ?? []) as HandleItem[]);
     let editingId = $state<string | null>(null);
     let editValue = $state("");
     let showDropdown = $state(false);
 
-    let selectedScript = $derived(data.script ?? "");
+    let selectedScript = $derived(((data as any)?.script ?? "") as string);
+
 
     function addHandle() {
         const newId = crypto.randomUUID().slice(0, 8);

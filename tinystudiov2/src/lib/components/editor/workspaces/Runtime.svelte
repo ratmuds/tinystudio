@@ -378,14 +378,6 @@
         {/if}
     </div>
 
-    {#if !isRunning}
-        <div
-            class="flex h-full items-center justify-center text-muted-foreground"
-        >
-            <p>i am the runtime and i run</p>
-        </div>
-    {/if}
-
     <!-- 3D Viewport -->
     <div class="flex-1 overflow-hidden">
         {#if worldData}
@@ -400,7 +392,17 @@
                     orbitControls={false}
                     bind:domElement
                 />
+
+                {#if !isRunning}
+                    <div class="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/25 backdrop-blur-[1px]">
+                        <div class="rounded-xl border border-border/60 bg-card/90 px-6 py-4 shadow-xl backdrop-blur-md text-center">
+                            <p class="text-sm font-semibold text-foreground">Runtime Stopped</p>
+                            <p class="mt-1 text-xs text-muted-foreground">Click "Play" in the top bar to run the game</p>
+                        </div>
+                    </div>
+                {/if}
             </div>
+
         {:else}
             <div
                 class="flex h-full items-center justify-center text-muted-foreground"

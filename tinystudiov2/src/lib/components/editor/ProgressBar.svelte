@@ -4,7 +4,6 @@
 <div
     class="progress-container h-1 bg-background"
     role="progressbar"
-    aria-indeterminate="true"
 >
     <div class="progress-bar bg-green-500"></div>
 </div>

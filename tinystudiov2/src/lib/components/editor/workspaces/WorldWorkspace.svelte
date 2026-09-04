@@ -7,6 +7,7 @@
     import * as Resizable from "$lib/components/ui/resizable/index.js";
     import * as Tooltip from "$lib/components/ui/tooltip/index.js";
     import * as Kbd from "$lib/components/ui/kbd/index.js";
+    import * as Command from "$lib/components/ui/command/index.js";
 
     import {
         MousePointer2,
@@ -274,6 +275,22 @@
 
         // Create Three.js group
         createGroupForEntity(entity);
+    }
+
+    let addComponentModalOpen = $state(false);
+
+    function handleAddComponent(componentType: string) {
+        if (selectedPartIds.length === 0) return;
+        const entity = worldData.entities.find(
+            (e) => e.id === selectedPartIds[0],
+        );
+        if (!entity) return;
+
+        if (componentType === "Script") {
+            const component = ECS.createScriptComponent();
+            entity.components.push(component);
+        }
+        addComponentModalOpen = false;
     }
 
     /** Delete a world entity and its Three.js group. */
@@ -943,6 +960,9 @@
 
                 <ComponentPropertiesPanel
                     components={getSelectedPartComponents()}
+                    scripts={gameData.scripts}
+                    showAddButton={true}
+                    onAddComponent={() => (addComponentModalOpen = true)}
                 />
             {:else}
                 <p class="mb-4 text-xs text-muted-foreground">
@@ -980,3 +1000,15 @@
         </div>
     </Resizable.Pane>
 </Resizable.PaneGroup>
+
+<Command.Dialog bind:open={addComponentModalOpen} class="rounded-xl p-5">
+    <Command.Input placeholder="Search for a component..." />
+    <Command.List class="mt-3">
+        <Command.Empty>No results found.</Command.Empty>
+        <Command.Group heading="Components">
+            <Command.Item onSelect={() => handleAddComponent("Script")}>
+                Script
+            </Command.Item>
+        </Command.Group>
+    </Command.List>
+</Command.Dialog>

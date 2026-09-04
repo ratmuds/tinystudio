@@ -53,11 +53,27 @@ export async function generateObjectPreview(
                 z: number;
             };
 
-            // uhh just do boxes for now
-            // todo: support other geometry types
+            const meshComp = entity.components.find((c) => c.name === "Mesh");
+            let materialColor = 0x3b82f6;
+            let geometryType = "box";
+            if (meshComp) {
+                if (typeof meshComp.data.color?.value === "number") {
+                    materialColor = meshComp.data.color.value;
+                }
+                if (typeof meshComp.data.geometry?.value === "string") {
+                    geometryType = meshComp.data.geometry.value;
+                }
+            }
 
-            let material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
-            let geometry = new THREE.BoxGeometry(1, 1, 1);
+            let material = new THREE.MeshStandardMaterial({ color: materialColor });
+            let geometry: THREE.BufferGeometry;
+            if (geometryType === "sphere") {
+                geometry = new THREE.SphereGeometry(0.5, 16, 16);
+            } else if (geometryType === "cylinder") {
+                geometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 16);
+            } else {
+                geometry = new THREE.BoxGeometry(1, 1, 1);
+            }
             let mesh = new THREE.Mesh(geometry, material);
             mesh.position.set(position.x, position.y, position.z);
             mesh.rotation.set(rotation.x, rotation.y, rotation.z);

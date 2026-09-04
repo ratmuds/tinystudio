@@ -19,7 +19,6 @@
             <Command.Item onSelect={() => onSelect?.("Camera")}
                 >Camera</Command.Item
             >
-            <Command.Item onSelect={() => onSelect?.("Light")}>Light</Command.Item>
         </Command.Group>
     </Command.List>
 </Command.Dialog>
