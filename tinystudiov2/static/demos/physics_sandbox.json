@@ -1,0 +1,318 @@
+{
+  "name": "Physics Sandbox",
+  "description": "Interactive rigid-body physics arena with tumble block towers, dominoes, and shockwaves.",
+  "components": [],
+  "systems": [],
+  "worlds": [
+    {
+      "id": "world-physics",
+      "name": "Demolition Yard",
+      "entities": [
+        {
+          "id": "phys-ground",
+          "name": "Ground",
+          "baseEntity": "part",
+          "components": [
+            {
+              "id": "c-pg-t",
+              "name": "Transform",
+              "tooltip": "Transform",
+              "data": {
+                "position": { "type": "vec3", "value": { "x": 0, "y": -0.5, "z": 0 } },
+                "rotation": { "type": "vec3", "value": { "x": 0, "y": 0, "z": 0 } },
+                "scale": { "type": "vec3", "value": { "x": 50, "y": 1, "z": 50 } }
+              }
+            },
+            {
+              "id": "c-pg-m",
+              "name": "Mesh",
+              "tooltip": "Mesh",
+              "data": {
+                "geometryType": { "type": "string", "value": "box" },
+                "color": { "type": "color", "value": 1515825 },
+                "size": { "type": "vec3", "value": { "x": 1, "y": 1, "z": 1 } }
+              }
+            },
+            {
+              "id": "c-pg-p",
+              "name": "Physics",
+              "tooltip": "Physics",
+              "data": {
+                "enabled": { "type": "boolean", "value": true },
+                "anchored": { "type": "boolean", "value": true }
+              }
+            }
+          ]
+        },
+        {
+          "id": "phys-player",
+          "name": "Player",
+          "baseEntity": "player",
+          "components": [
+            {
+              "id": "c-pp-t",
+              "name": "Transform",
+              "tooltip": "Transform",
+              "data": {
+                "position": { "type": "vec3", "value": { "x": 0, "y": 1.5, "z": 6 } },
+                "rotation": { "type": "vec3", "value": { "x": 0, "y": 0, "z": 0 } },
+                "scale": { "type": "vec3", "value": { "x": 1, "y": 1, "z": 1 } }
+              }
+            },
+            {
+              "id": "c-pp-m",
+              "name": "Mesh",
+              "tooltip": "Mesh",
+              "data": {
+                "geometryType": { "type": "string", "value": "cylinder" },
+                "color": { "type": "color", "value": 14759400 },
+                "size": { "type": "vec3", "value": { "x": 0.8, "y": 1.8, "z": 0.8 } }
+              }
+            },
+            {
+              "id": "c-pp-p",
+              "name": "Physics",
+              "tooltip": "Physics",
+              "data": {
+                "enabled": { "type": "boolean", "value": true },
+                "anchored": { "type": "boolean", "value": false },
+                "mass": { "type": "number", "value": 75 }
+              }
+            },
+            {
+              "id": "c-pp-c",
+              "name": "PlayerController",
+              "tooltip": "PlayerController",
+              "data": {
+                "speed": { "type": "number", "value": 9 },
+                "jumpForce": { "type": "number", "value": 9.5 },
+                "airControl": { "type": "number", "value": 0.7 },
+                "enabled": { "type": "boolean", "value": true }
+              }
+            }
+          ]
+        },
+        {
+          "id": "phys-cam",
+          "name": "Main Camera",
+          "baseEntity": "camera",
+          "components": [
+            {
+              "id": "c-pc-t",
+              "name": "Transform",
+              "tooltip": "Transform",
+              "data": {
+                "position": { "type": "vec3", "value": { "x": 0, "y": 5, "z": 12 } },
+                "rotation": { "type": "vec3", "value": { "x": 0, "y": 0, "z": 0 } },
+                "scale": { "type": "vec3", "value": { "x": 1, "y": 1, "z": 1 } }
+              }
+            },
+            {
+              "id": "c-pc-c",
+              "name": "Camera",
+              "tooltip": "Camera",
+              "data": {
+                "active": { "type": "boolean", "value": true },
+                "mode": { "type": "string", "value": "follow" },
+                "fov": { "type": "number", "value": 50 }
+              }
+            }
+          ]
+        },
+        {
+          "id": "block-1",
+          "name": "Tower Base Left",
+          "baseEntity": "part",
+          "components": [
+            {
+              "id": "c-b1-t",
+              "name": "Transform",
+              "tooltip": "Transform",
+              "data": {
+                "position": { "type": "vec3", "value": { "x": -1.2, "y": 0.75, "z": 0 } },
+                "rotation": { "type": "vec3", "value": { "x": 0, "y": 0, "z": 0 } },
+                "scale": { "type": "vec3", "value": { "x": 1.2, "y": 1.5, "z": 1.2 } }
+              }
+            },
+            {
+              "id": "c-b1-m",
+              "name": "Mesh",
+              "tooltip": "Mesh",
+              "data": {
+                "geometryType": { "type": "string", "value": "box" },
+                "color": { "type": "color", "value": 16737380 },
+                "size": { "type": "vec3", "value": { "x": 1, "y": 1, "z": 1 } }
+              }
+            },
+            {
+              "id": "c-b1-p",
+              "name": "Physics",
+              "tooltip": "Physics",
+              "data": {
+                "enabled": { "type": "boolean", "value": true },
+                "anchored": { "type": "boolean", "value": false },
+                "mass": { "type": "number", "value": 5 }
+              }
+            }
+          ]
+        },
+        {
+          "id": "block-2",
+          "name": "Tower Base Right",
+          "baseEntity": "part",
+          "components": [
+            {
+              "id": "c-b2-t",
+              "name": "Transform",
+              "tooltip": "Transform",
+              "data": {
+                "position": { "type": "vec3", "value": { "x": 1.2, "y": 0.75, "z": 0 } },
+                "rotation": { "type": "vec3", "value": { "x": 0, "y": 0, "z": 0 } },
+                "scale": { "type": "vec3", "value": { "x": 1.2, "y": 1.5, "z": 1.2 } }
+              }
+            },
+            {
+              "id": "c-b2-m",
+              "name": "Mesh",
+              "tooltip": "Mesh",
+              "data": {
+                "geometryType": { "type": "string", "value": "box" },
+                "color": { "type": "color", "value": 16737380 },
+                "size": { "type": "vec3", "value": { "x": 1, "y": 1, "z": 1 } }
+              }
+            },
+            {
+              "id": "c-b2-p",
+              "name": "Physics",
+              "tooltip": "Physics",
+              "data": {
+                "enabled": { "type": "boolean", "value": true },
+                "anchored": { "type": "boolean", "value": false },
+                "mass": { "type": "number", "value": 5 }
+              }
+            }
+          ]
+        },
+        {
+          "id": "block-3",
+          "name": "Tower Beam Mid",
+          "baseEntity": "part",
+          "components": [
+            {
+              "id": "c-b3-t",
+              "name": "Transform",
+              "tooltip": "Transform",
+              "data": {
+                "position": { "type": "vec3", "value": { "x": 0, "y": 1.8, "z": 0 } },
+                "rotation": { "type": "vec3", "value": { "x": 0, "y": 0, "z": 0 } },
+                "scale": { "type": "vec3", "value": { "x": 3.8, "y": 0.5, "z": 1.2 } }
+              }
+            },
+            {
+              "id": "c-b3-m",
+              "name": "Mesh",
+              "tooltip": "Mesh",
+              "data": {
+                "geometryType": { "type": "string", "value": "box" },
+                "color": { "type": "color", "value": 16763904 },
+                "size": { "type": "vec3", "value": { "x": 1, "y": 1, "z": 1 } }
+              }
+            },
+            {
+              "id": "c-b3-p",
+              "name": "Physics",
+              "tooltip": "Physics",
+              "data": {
+                "enabled": { "type": "boolean", "value": true },
+                "anchored": { "type": "boolean", "value": false },
+                "mass": { "type": "number", "value": 8 }
+              }
+            }
+          ]
+        },
+        {
+          "id": "block-4",
+          "name": "Tower Cap Box",
+          "baseEntity": "part",
+          "components": [
+            {
+              "id": "c-b4-t",
+              "name": "Transform",
+              "tooltip": "Transform",
+              "data": {
+                "position": { "type": "vec3", "value": { "x": 0, "y": 2.6, "z": 0 } },
+                "rotation": { "type": "vec3", "value": { "x": 0, "y": 0, "z": 0 } },
+                "scale": { "type": "vec3", "value": { "x": 1.2, "y": 1.2, "z": 1.2 } }
+              }
+            },
+            {
+              "id": "c-b4-m",
+              "name": "Mesh",
+              "tooltip": "Mesh",
+              "data": {
+                "geometryType": { "type": "string", "value": "box" },
+                "color": { "type": "color", "value": 4519935 },
+                "size": { "type": "vec3", "value": { "x": 1, "y": 1, "z": 1 } }
+              }
+            },
+            {
+              "id": "c-b4-p",
+              "name": "Physics",
+              "tooltip": "Physics",
+              "data": {
+                "enabled": { "type": "boolean", "value": true },
+                "anchored": { "type": "boolean", "value": false },
+                "mass": { "type": "number", "value": 4 }
+              }
+            }
+          ]
+        },
+        {
+          "id": "shockwave-btn",
+          "name": "Shockwave Button",
+          "baseEntity": "ui",
+          "components": [
+            {
+              "id": "c-sw-b",
+              "name": "UI",
+              "tooltip": "UI Button",
+              "data": {
+                "type": { "type": "string", "value": "button" },
+                "text": { "type": "string", "value": "💥 Trigger Shockwave" },
+                "x": { "type": "number", "value": 20 },
+                "y": { "type": "number", "value": 20 },
+                "width": { "type": "number", "value": 180 },
+                "height": { "type": "number", "value": 40 },
+                "fontSize": { "type": "number", "value": 13 },
+                "color": { "type": "string", "value": "#ffffff" },
+                "backgroundColor": { "type": "string", "value": "#ef4444" },
+                "visible": { "type": "boolean", "value": true }
+              }
+            },
+            {
+              "id": "c-sw-s",
+              "name": "Script",
+              "tooltip": "Script",
+              "data": {
+                "scriptId": { "type": "string", "value": "script-physics" }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "models": [],
+  "scripts": [
+    {
+      "id": "script-physics",
+      "name": "ShockwaveLogic",
+      "stateData": {},
+      "scriptData": [
+        {
+          "code": "-- Shockwave trigger script\nUI.onClick(\"Shockwave Button\", function()\n    print(\"Shockwave blasted through the arena!\")\n    UI.setText(\"Shockwave Button\", \"💥 Detonated!\")\n    wait(1)\n    UI.setText(\"Shockwave Button\", \"💥 Trigger Shockwave\")\nend)"
+        }
+      ]
+    }
+  ]
+}

@@ -53,12 +53,12 @@ export function syncCameraHelper(
     const cameraComp = entity.components.find((c) => c.name === "Camera");
     if (!transformComp || !cameraComp) return;
 
-    const pos = (transformComp.data.position.value ?? {
+    const pos = (transformComp.data.position?.value ?? {
         x: 0,
         y: 0,
         z: 0,
     }) as { x: number; y: number; z: number };
-    const rot = (transformComp.data.rotation.value ?? {
+    const rot = (transformComp.data.rotation?.value ?? {
         x: 0,
         y: 0,
         z: 0,
@@ -68,7 +68,7 @@ export function syncCameraHelper(
     entry.group.position.set(pos.x, pos.y, pos.z);
     entry.group.rotation.set(rot.x, rot.y, rot.z);
 
-    const fov = cameraComp.data.fov.value as number;
+    const fov = cameraComp.data.fov?.value as number | undefined;
     if (typeof fov === "number" && fov !== entry.dummy.fov) {
         entry.dummy.fov = fov;
         entry.dummy.updateProjectionMatrix();

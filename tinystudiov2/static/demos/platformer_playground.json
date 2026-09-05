@@ -1,0 +1,315 @@
+{
+  "name": "Platformer Playground",
+  "description": "Third-person character obstacle course with jumping platforms, spinning hazards, and follow camera.",
+  "components": [],
+  "systems": [],
+  "worlds": [
+    {
+      "id": "world-platformer",
+      "name": "Obstacle Course",
+      "entities": [
+        {
+          "id": "ground-1",
+          "name": "Ground",
+          "baseEntity": "part",
+          "components": [
+            {
+              "id": "c-gt-1",
+              "name": "Transform",
+              "tooltip": "Entity transform",
+              "data": {
+                "position": { "type": "vec3", "value": { "x": 0, "y": -0.5, "z": 0 } },
+                "rotation": { "type": "vec3", "value": { "x": 0, "y": 0, "z": 0 } },
+                "scale": { "type": "vec3", "value": { "x": 40, "y": 1, "z": 40 } }
+              }
+            },
+            {
+              "id": "c-gm-1",
+              "name": "Mesh",
+              "tooltip": "Mesh rendering",
+              "data": {
+                "geometryType": { "type": "string", "value": "box" },
+                "color": { "type": "color", "value": 1976635 },
+                "size": { "type": "vec3", "value": { "x": 1, "y": 1, "z": 1 } }
+              }
+            },
+            {
+              "id": "c-gp-1",
+              "name": "Physics",
+              "tooltip": "Physics simulation",
+              "data": {
+                "enabled": { "type": "boolean", "value": true },
+                "anchored": { "type": "boolean", "value": true },
+                "mass": { "type": "number", "value": 1000 }
+              }
+            }
+          ]
+        },
+        {
+          "id": "player-1",
+          "name": "Player",
+          "baseEntity": "player",
+          "components": [
+            {
+              "id": "c-pt-1",
+              "name": "Transform",
+              "tooltip": "Player transform",
+              "data": {
+                "position": { "type": "vec3", "value": { "x": 0, "y": 1.5, "z": 2 } },
+                "rotation": { "type": "vec3", "value": { "x": 0, "y": 0, "z": 0 } },
+                "scale": { "type": "vec3", "value": { "x": 1, "y": 1, "z": 1 } }
+              }
+            },
+            {
+              "id": "c-pm-1",
+              "name": "Mesh",
+              "tooltip": "Player avatar",
+              "data": {
+                "geometryType": { "type": "string", "value": "cylinder" },
+                "color": { "type": "color", "value": 959977 },
+                "size": { "type": "vec3", "value": { "x": 0.8, "y": 1.8, "z": 0.8 } }
+              }
+            },
+            {
+              "id": "c-pp-1",
+              "name": "Physics",
+              "tooltip": "Player physics",
+              "data": {
+                "enabled": { "type": "boolean", "value": true },
+                "anchored": { "type": "boolean", "value": false },
+                "mass": { "type": "number", "value": 70 }
+              }
+            },
+            {
+              "id": "c-pc-1",
+              "name": "PlayerController",
+              "tooltip": "WASD player controls",
+              "data": {
+                "speed": { "type": "number", "value": 8.5 },
+                "jumpForce": { "type": "number", "value": 9.2 },
+                "airControl": { "type": "number", "value": 0.65 },
+                "enabled": { "type": "boolean", "value": true }
+              }
+            }
+          ]
+        },
+        {
+          "id": "cam-1",
+          "name": "Follow Camera",
+          "baseEntity": "camera",
+          "components": [
+            {
+              "id": "c-ct-1",
+              "name": "Transform",
+              "tooltip": "Camera transform",
+              "data": {
+                "position": { "type": "vec3", "value": { "x": 0, "y": 5, "z": 8 } },
+                "rotation": { "type": "vec3", "value": { "x": 0, "y": 0, "z": 0 } },
+                "scale": { "type": "vec3", "value": { "x": 1, "y": 1, "z": 1 } }
+              }
+            },
+            {
+              "id": "c-cc-1",
+              "name": "Camera",
+              "tooltip": "Camera controls",
+              "data": {
+                "active": { "type": "boolean", "value": true },
+                "mode": { "type": "string", "value": "follow" },
+                "fov": { "type": "number", "value": 50 }
+              }
+            }
+          ]
+        },
+        {
+          "id": "plat-1",
+          "name": "Platform A",
+          "baseEntity": "part",
+          "components": [
+            {
+              "id": "c-p1-t",
+              "name": "Transform",
+              "tooltip": "Platform A transform",
+              "data": {
+                "position": { "type": "vec3", "value": { "x": 0, "y": 1.2, "z": -4 } },
+                "rotation": { "type": "vec3", "value": { "x": 0, "y": 0, "z": 0 } },
+                "scale": { "type": "vec3", "value": { "x": 3.5, "y": 0.5, "z": 3.5 } }
+              }
+            },
+            {
+              "id": "c-p1-m",
+              "name": "Mesh",
+              "tooltip": "Mesh",
+              "data": {
+                "geometryType": { "type": "string", "value": "box" },
+                "color": { "type": "color", "value": 2278750 },
+                "size": { "type": "vec3", "value": { "x": 1, "y": 1, "z": 1 } }
+              }
+            },
+            {
+              "id": "c-p1-p",
+              "name": "Physics",
+              "tooltip": "Physics",
+              "data": {
+                "enabled": { "type": "boolean", "value": true },
+                "anchored": { "type": "boolean", "value": true }
+              }
+            }
+          ]
+        },
+        {
+          "id": "plat-2",
+          "name": "Platform B",
+          "baseEntity": "part",
+          "components": [
+            {
+              "id": "c-p2-t",
+              "name": "Transform",
+              "tooltip": "Platform B transform",
+              "data": {
+                "position": { "type": "vec3", "value": { "x": 4, "y": 2.5, "z": -8 } },
+                "rotation": { "type": "vec3", "value": { "x": 0, "y": 0, "z": 0 } },
+                "scale": { "type": "vec3", "value": { "x": 3, "y": 0.5, "z": 3 } }
+              }
+            },
+            {
+              "id": "c-p2-m",
+              "name": "Mesh",
+              "tooltip": "Mesh",
+              "data": {
+                "geometryType": { "type": "string", "value": "box" },
+                "color": { "type": "color", "value": 3192004 },
+                "size": { "type": "vec3", "value": { "x": 1, "y": 1, "z": 1 } }
+              }
+            },
+            {
+              "id": "c-p2-p",
+              "name": "Physics",
+              "tooltip": "Physics",
+              "data": {
+                "enabled": { "type": "boolean", "value": true },
+                "anchored": { "type": "boolean", "value": true }
+              }
+            }
+          ]
+        },
+        {
+          "id": "plat-3",
+          "name": "Platform C",
+          "baseEntity": "part",
+          "components": [
+            {
+              "id": "c-p3-t",
+              "name": "Transform",
+              "tooltip": "Platform C transform",
+              "data": {
+                "position": { "type": "vec3", "value": { "x": -1, "y": 4.0, "z": -12 } },
+                "rotation": { "type": "vec3", "value": { "x": 0, "y": 0, "z": 0 } },
+                "scale": { "type": "vec3", "value": { "x": 3, "y": 0.5, "z": 3 } }
+              }
+            },
+            {
+              "id": "c-p3-m",
+              "name": "Mesh",
+              "tooltip": "Mesh",
+              "data": {
+                "geometryType": { "type": "string", "value": "box" },
+                "color": { "type": "color", "value": 15957014 },
+                "size": { "type": "vec3", "value": { "x": 1, "y": 1, "z": 1 } }
+              }
+            },
+            {
+              "id": "c-p3-p",
+              "name": "Physics",
+              "tooltip": "Physics",
+              "data": {
+                "enabled": { "type": "boolean", "value": true },
+                "anchored": { "type": "boolean", "value": true }
+              }
+            }
+          ]
+        },
+        {
+          "id": "spinner-1",
+          "name": "Spinning Hazard",
+          "baseEntity": "part",
+          "components": [
+            {
+              "id": "c-sp-t",
+              "name": "Transform",
+              "tooltip": "Spinner transform",
+              "data": {
+                "position": { "type": "vec3", "value": { "x": -1, "y": 5.0, "z": -12 } },
+                "rotation": { "type": "vec3", "value": { "x": 0, "y": 0, "z": 0 } },
+                "scale": { "type": "vec3", "value": { "x": 4.5, "y": 0.4, "z": 0.4 } }
+              }
+            },
+            {
+              "id": "c-sp-m",
+              "name": "Mesh",
+              "tooltip": "Mesh",
+              "data": {
+                "geometryType": { "type": "string", "value": "box" },
+                "color": { "type": "color", "value": 16726356 },
+                "size": { "type": "vec3", "value": { "x": 1, "y": 1, "z": 1 } }
+              }
+            },
+            {
+              "id": "c-sp-p",
+              "name": "Physics",
+              "tooltip": "Physics",
+              "data": {
+                "enabled": { "type": "boolean", "value": true },
+                "anchored": { "type": "boolean", "value": true }
+              }
+            },
+            {
+              "id": "c-sp-s",
+              "name": "Script",
+              "tooltip": "Rotation script",
+              "data": {
+                "scriptId": { "type": "string", "value": "script-platformer" }
+              }
+            }
+          ]
+        },
+        {
+          "id": "ui-hint",
+          "name": "Guide Text",
+          "baseEntity": "ui",
+          "components": [
+            {
+              "id": "c-ui-1",
+              "name": "UI",
+              "tooltip": "UI text display",
+              "data": {
+                "type": { "type": "string", "value": "text" },
+                "text": { "type": "string", "value": "🕹 WASD to Run • Space to Jump • Reach the spinning peak!" },
+                "x": { "type": "number", "value": 20 },
+                "y": { "type": "number", "value": 20 },
+                "width": { "type": "number", "value": 460 },
+                "height": { "type": "number", "value": 36 },
+                "fontSize": { "type": "number", "value": 13 },
+                "color": { "type": "string", "value": "#ffffff" },
+                "backgroundColor": { "type": "string", "value": "rgba(15, 23, 42, 0.85)" },
+                "visible": { "type": "boolean", "value": true }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "models": [],
+  "scripts": [
+    {
+      "id": "script-platformer",
+      "name": "HazardSpin",
+      "stateData": {},
+      "scriptData": [
+        {
+          "code": "-- Continuously spins the obstacle hazard\nwhile true do\n    wait(0.02)\n    if Transform then\n        Transform.rotation.y = Transform.rotation.y + 0.05\n    end\nend"
+        }
+      ]
+    }
+  ]
+}

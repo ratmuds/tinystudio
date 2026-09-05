@@ -10,6 +10,7 @@
         Globe,
         Box,
         Code,
+        FolderKanban,
     } from "@lucide/svelte";
     import { fly } from "svelte/transition";
     import { quintOut } from "svelte/easing";
@@ -22,6 +23,7 @@
         saving,
         onsave,
         onplay,
+        onopenprojects,
     }: {
         menus: Record<string, MenuItem[]>;
         activeWorkspace: WorkspaceKind;
@@ -29,6 +31,7 @@
         saving: boolean;
         onsave: () => void;
         onplay?: () => void;
+        onopenprojects?: () => void;
     } = $props();
 
     let openMenu = $state<string | null>(null);
@@ -99,8 +102,11 @@
                                 <div class="my-1 h-px bg-border/60"></div>
                             {:else}
                                 <button
-                                    class="flex w-full items-center justify-between rounded-md px-3 py-1.5 text-sm duration-100 hover:bg-muted"
-                                    onclick={() => (openMenu = null)}
+                                    class="flex w-full items-center justify-between rounded-md px-3 py-1.5 text-sm duration-100 hover:bg-muted cursor-pointer"
+                                    onclick={() => {
+                                        openMenu = null;
+                                        item.action?.();
+                                    }}
                                 >
                                     <span>{item.label}</span>
                                     {#if item.shortcut}
@@ -153,30 +159,20 @@
         </div>
     </div>
 
-    <div class="ml-auto flex items-center gap-3">
+    <div class="ml-auto flex items-center gap-2.5">
         <Tooltip.Provider>
             <Tooltip.Root>
                 <Tooltip.Trigger
-                    onclick={() => alert("Project saving is unavailable in the demo version")}
-                    class="flex cursor-not-allowed items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground/60 opacity-60 transition-all active:scale-95"
-                    aria-label="Save status"
+                    onclick={() => onopenprojects?.()}
+                    class="flex items-center gap-1.5 rounded-lg border border-border/70 bg-muted/40 px-3 py-1.5 text-xs font-semibold text-foreground transition-all duration-150 hover:border-green-500/50 hover:bg-muted hover:text-green-400 active:scale-95 cursor-pointer shadow-sm"
+                    aria-label="Projects"
                 >
-                    {#if saving}
-                        <CloudCheck
-                            class="h-3.5 w-3.5 animate-pulse text-yellow-500"
-                        />
-                        <span class="text-yellow-500">Saving…</span>
-                    {:else if saved}
-                        <CloudCheck class="h-3.5 w-3.5 text-green-500" />
-                        <span>Saved</span>
-                    {:else}
-                        <CloudCheck class="h-3.5 w-3.5" />
-                        <span>Unsaved</span>
-                    {/if}
+                    <FolderKanban class="h-3.5 w-3.5 text-green-500" />
+                    <span>Projects</span>
                 </Tooltip.Trigger>
                 <Tooltip.Content>
                     <p>
-                        Save <Kbd.Root class="ml-1 font-bold">Ctrl+S</Kbd.Root>
+                        New, Open, Save, or Load Demo Projects
                     </p>
                 </Tooltip.Content>
             </Tooltip.Root>

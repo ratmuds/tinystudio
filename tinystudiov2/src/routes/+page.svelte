@@ -6,6 +6,11 @@
     import ModelWorkspace from "$lib/components/editor/workspaces/ModelWorkspace.svelte";
     import ScriptWorkspace from "$lib/components/editor/workspaces/ScriptWorkspace.svelte";
     import RuntimeWorkspace from "$lib/components/editor/workspaces/Runtime.svelte";
+    import ProjectsModal from "$lib/components/editor/ProjectsModal.svelte";
+    import {
+        createBlankProject,
+        downloadProjectFile,
+    } from "$lib/utils/projectSerializer";
 
     import * as Command from "$lib/components/ui/command/index.js";
 
@@ -231,6 +236,46 @@
         openTestTab();
     }
 
+    // ─── Projects & Persistence ──────────────────────────────────────────
+    let projectsModalOpen = $state(true); // Open on first visit
+    let hasStarted = $state(false);
+
+    function handleNewProject() {
+        gameData = createBlankProject();
+        tabs = [];
+        if (gameData.worlds.length > 0) {
+            openWorldTab(gameData.worlds[0].name, gameData.worlds[0]);
+        }
+        if (gameData.scripts.length > 0) {
+            openScriptTab(gameData.scripts[0].name, gameData.scripts[0]);
+        }
+        openTestTab();
+        hasStarted = true;
+        triggerSave();
+    }
+
+    function handleLoadProject(newGameData: GameData) {
+        gameData = newGameData;
+        tabs = [];
+        if (gameData.worlds.length > 0) {
+            openWorldTab(gameData.worlds[0].name, gameData.worlds[0]);
+        }
+        if (gameData.scripts.length > 0) {
+            openScriptTab(gameData.scripts[0].name, gameData.scripts[0]);
+        }
+        if (gameData.models.length > 0) {
+            openModelTab(gameData.models[0].name, gameData.models[0]);
+        }
+        openTestTab();
+        hasStarted = true;
+        triggerSave();
+    }
+
+    function handleSaveProject() {
+        downloadProjectFile(gameData);
+        triggerSave();
+    }
+
     // ─── Save ────────────────────────────────────────────────────────────
     let saved = $state(true);
     let saving = $state(false);
@@ -248,12 +293,14 @@
     // ─── Menu config ─────────────────────────────────────────────────────
     const menus: Record<string, MenuItem[]> = {
         File: [
-            { label: "New World", shortcut: "Ctrl+N" },
-            { label: "New Model", shortcut: "Ctrl+M" },
-            { label: "Open…", shortcut: "Ctrl+O" },
+            { label: "Projects…", action: () => (projectsModalOpen = true) },
             { separator: true },
-            { label: "Save", shortcut: "Ctrl+S" },
-            { label: "Save As…", shortcut: "Ctrl+Shift+S" },
+            { label: "New World", shortcut: "Ctrl+N", action: () => createNewWorld() },
+            { label: "New Model", shortcut: "Ctrl+M", action: () => createNewModel() },
+            { label: "Open Project…", shortcut: "Ctrl+O", action: () => (projectsModalOpen = true) },
+            { separator: true },
+            { label: "Save Project", shortcut: "Ctrl+S", action: () => handleSaveProject() },
+            { label: "Save As…", shortcut: "Ctrl+Shift+S", action: () => handleSaveProject() },
             { separator: true },
             { label: "Export Model" },
             { label: "Export Image" },
@@ -465,14 +512,24 @@
 
 <SplashScreen />
 
+<ProjectsModal
+    bind:open={projectsModalOpen}
+    bind:hasStarted
+    {gameData}
+    onNewProject={handleNewProject}
+    onLoadProject={handleLoadProject}
+    onSaveProject={handleSaveProject}
+/>
+
 <div class="flex h-dvh flex-col">
     <MenuBar
         {menus}
         bind:activeWorkspace
         {saved}
         {saving}
-        onsave={triggerSave}
+        onsave={handleSaveProject}
         onplay={() => switchWorkspace("test")}
+        onopenprojects={() => (projectsModalOpen = true)}
     />
 
 

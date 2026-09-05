@@ -81,13 +81,13 @@ export class CameraSystem extends System {
         );
         if (!cameraComp || !transformComp) return;
 
-        const mode = (cameraComp.data.mode.value as CameraMode) ?? "orbit";
-        const target = (cameraComp.data.target.value ?? {
+        const mode = (cameraComp.data.mode?.value as CameraMode) ?? "orbit";
+        const target = (cameraComp.data.target?.value ?? {
             x: 0,
             y: 0,
             z: 0,
         }) as { x: number; y: number; z: number };
-        const fov = (cameraComp.data.fov.value as number) ?? 75;
+        const fov = (cameraComp.data.fov?.value as number) ?? 75;
 
         this.ensureControls();
 
@@ -114,7 +114,7 @@ export class CameraSystem extends System {
             );
             if (player) {
                 const pt = player.components.find((c) => c.name === "Transform");
-                if (pt) {
+                if (pt && pt.data.position?.value) {
                     const p = pt.data.position.value as {
                         x: number;
                         y: number;
@@ -140,13 +140,13 @@ export class CameraSystem extends System {
         } else if (mode === "firstPerson") {
             if (this.firstPersonControls) {
                 this.firstPersonControls.movementSpeed =
-                    (cameraComp.data.moveSpeed.value as number) ?? 8;
+                    (cameraComp.data.moveSpeed?.value as number) ?? 8;
                 this.firstPersonControls.update(_deltaTime);
             }
         } else if (mode === "fly") {
             if (this.flyControls) {
                 this.flyControls.movementSpeed =
-                    (cameraComp.data.moveSpeed.value as number) ?? 8;
+                    (cameraComp.data.moveSpeed?.value as number) ?? 8;
                 this.flyControls.update(_deltaTime);
             }
         }
@@ -179,19 +179,19 @@ export class CameraSystem extends System {
         return (
             cameras.find((e) => {
                 const comp = e.components.find((c) => c.name === "Camera");
-                return comp?.data.active.value === true;
+                return comp?.data.active?.value === true;
             }) ?? cameras[0]
         );
     }
 
     private applyTransformToCamera(transformComp: Component): void {
         if (!this.camera) return;
-        const p = transformComp.data.position.value as {
+        const p = (transformComp.data.position?.value ?? { x: 0, y: 0, z: 0 }) as {
             x: number;
             y: number;
             z: number;
         };
-        const r = transformComp.data.rotation.value as {
+        const r = (transformComp.data.rotation?.value ?? { x: 0, y: 0, z: 0 }) as {
             x: number;
             y: number;
             z: number;
@@ -202,18 +202,22 @@ export class CameraSystem extends System {
 
     private applyCameraToTransform(transformComp: Component): void {
         if (!this.camera) return;
-        transformComp.data.position.value = {
-            x: this.camera.position.x,
-            y: this.camera.position.y,
-            z: this.camera.position.z,
-        };
-        transformComp.data.rotation.value = {
-            x: this.camera.rotation.x,
-            y: this.camera.rotation.y,
-            z: this.camera.rotation.z,
-        };
-        transformComp.data.position.dirty = true;
-        transformComp.data.rotation.dirty = true;
+        if (transformComp.data.position) {
+            transformComp.data.position.value = {
+                x: +this.camera.position.x.toFixed(3),
+                y: +this.camera.position.y.toFixed(3),
+                z: +this.camera.position.z.toFixed(3),
+            };
+            transformComp.data.position.dirty = true;
+        }
+        if (transformComp.data.rotation) {
+            transformComp.data.rotation.value = {
+                x: +this.camera.rotation.x.toFixed(3),
+                y: +this.camera.rotation.y.toFixed(3),
+                z: +this.camera.rotation.z.toFixed(3),
+            };
+            transformComp.data.rotation.dirty = true;
+        }
     }
 
     private ensureControls(): void {

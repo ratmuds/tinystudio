@@ -1,0 +1,26 @@
+[
+  {
+    "id": "platformer-playground",
+    "name": "Platformer Playground",
+    "description": "Third-person character obstacle course with jumping platforms, spinning hazards, and follow camera.",
+    "filename": "platformer_playground.json",
+    "icon": "gamepad",
+    "tags": ["Player", "Platforms", "Camera Follow"]
+  },
+  {
+    "id": "physics-sandbox",
+    "name": "Physics Sandbox",
+    "description": "Interactive rigid-body physics arena with tumble block towers, dominoes, and shockwaves.",
+    "filename": "physics_sandbox.json",
+    "icon": "boxes",
+    "tags": ["Jolt Physics", "Collisions", "Destruction"]
+  },
+  {
+    "id": "ui-clicker",
+    "name": "UI & Scripting Demo",
+    "description": "Interactive 3D crystal showcase with Screen UI button listeners, live counters, and Luau script loops.",
+    "filename": "ui_clicker.json",
+    "icon": "sparkles",
+    "tags": ["Screen UI", "Luau Scripts", "Events"]
+  }
+]

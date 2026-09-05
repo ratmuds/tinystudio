@@ -2,6 +2,7 @@ export type MenuItem = {
     label?: string;
     shortcut?: string;
     separator?: boolean;
+    action?: () => void;
 };
 
 export type StudioTab = {

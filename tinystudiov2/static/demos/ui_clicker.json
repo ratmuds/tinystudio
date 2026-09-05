@@ -1,0 +1,206 @@
+{
+  "name": "UI & Scripting Demo",
+  "description": "Interactive 3D crystal showcase with Screen UI button listeners, live counters, and Luau script loops.",
+  "components": [],
+  "systems": [],
+  "worlds": [
+    {
+      "id": "world-clicker",
+      "name": "Jewel Showcase",
+      "entities": [
+        {
+          "id": "ui-ground",
+          "name": "Pedestal Floor",
+          "baseEntity": "part",
+          "components": [
+            {
+              "id": "c-ug-t",
+              "name": "Transform",
+              "tooltip": "Transform",
+              "data": {
+                "position": { "type": "vec3", "value": { "x": 0, "y": -0.5, "z": 0 } },
+                "rotation": { "type": "vec3", "value": { "x": 0, "y": 0, "z": 0 } },
+                "scale": { "type": "vec3", "value": { "x": 30, "y": 1, "z": 30 } }
+              }
+            },
+            {
+              "id": "c-ug-m",
+              "name": "Mesh",
+              "tooltip": "Mesh",
+              "data": {
+                "geometryType": { "type": "string", "value": "box" },
+                "color": { "type": "color", "value": 1184274 },
+                "size": { "type": "vec3", "value": { "x": 1, "y": 1, "z": 1 } }
+              }
+            },
+            {
+              "id": "c-ug-p",
+              "name": "Physics",
+              "tooltip": "Physics",
+              "data": {
+                "enabled": { "type": "boolean", "value": true },
+                "anchored": { "type": "boolean", "value": true }
+              }
+            }
+          ]
+        },
+        {
+          "id": "jewel-1",
+          "name": "Spinning Jewel",
+          "baseEntity": "part",
+          "components": [
+            {
+              "id": "c-jw-t",
+              "name": "Transform",
+              "tooltip": "Transform",
+              "data": {
+                "position": { "type": "vec3", "value": { "x": 0, "y": 2.0, "z": 0 } },
+                "rotation": { "type": "vec3", "value": { "x": 0.4, "y": 0, "z": 0.4 } },
+                "scale": { "type": "vec3", "value": { "x": 2, "y": 2, "z": 2 } }
+              }
+            },
+            {
+              "id": "c-jw-m",
+              "name": "Mesh",
+              "tooltip": "Mesh",
+              "data": {
+                "geometryType": { "type": "string", "value": "box" },
+                "color": { "type": "color", "value": 2404078 },
+                "size": { "type": "vec3", "value": { "x": 1, "y": 1, "z": 1 } }
+              }
+            },
+            {
+              "id": "c-jw-p",
+              "name": "Physics",
+              "tooltip": "Physics",
+              "data": {
+                "enabled": { "type": "boolean", "value": true },
+                "anchored": { "type": "boolean", "value": true }
+              }
+            },
+            {
+              "id": "c-jw-s",
+              "name": "Script",
+              "tooltip": "Script",
+              "data": {
+                "scriptId": { "type": "string", "value": "script-clicker" }
+              }
+            }
+          ]
+        },
+        {
+          "id": "cam-showcase",
+          "name": "Showcase Camera",
+          "baseEntity": "camera",
+          "components": [
+            {
+              "id": "c-cs-t",
+              "name": "Transform",
+              "tooltip": "Transform",
+              "data": {
+                "position": { "type": "vec3", "value": { "x": 0, "y": 3.5, "z": 7 } },
+                "rotation": { "type": "vec3", "value": { "x": -0.2, "y": 0, "z": 0 } },
+                "scale": { "type": "vec3", "value": { "x": 1, "y": 1, "z": 1 } }
+              }
+            },
+            {
+              "id": "c-cs-c",
+              "name": "Camera",
+              "tooltip": "Camera",
+              "data": {
+                "active": { "type": "boolean", "value": true },
+                "mode": { "type": "string", "value": "orbit" },
+                "fov": { "type": "number", "value": 45 }
+              }
+            }
+          ]
+        },
+        {
+          "id": "ui-title",
+          "name": "Title Label",
+          "baseEntity": "ui",
+          "components": [
+            {
+              "id": "c-ut-l",
+              "name": "UI",
+              "tooltip": "UI",
+              "data": {
+                "type": { "type": "string", "value": "text" },
+                "text": { "type": "string", "value": "✨ TinyStudio Jewel Clicker" },
+                "x": { "type": "number", "value": 24 },
+                "y": { "type": "number", "value": 24 },
+                "width": { "type": "number", "value": 240 },
+                "height": { "type": "number", "value": 36 },
+                "fontSize": { "type": "number", "value": 15 },
+                "color": { "type": "string", "value": "#38bdf8" },
+                "backgroundColor": { "type": "string", "value": "rgba(15, 23, 42, 0.9)" },
+                "visible": { "type": "boolean", "value": true }
+              }
+            }
+          ]
+        },
+        {
+          "id": "ui-score",
+          "name": "Score Label",
+          "baseEntity": "ui",
+          "components": [
+            {
+              "id": "c-sc-l",
+              "name": "UI",
+              "tooltip": "UI",
+              "data": {
+                "type": { "type": "string", "value": "text" },
+                "text": { "type": "string", "value": "Crystals Collected: 0" },
+                "x": { "type": "number", "value": 24 },
+                "y": { "type": "number", "value": 70 },
+                "width": { "type": "number", "value": 240 },
+                "height": { "type": "number", "value": 36 },
+                "fontSize": { "type": "number", "value": 14 },
+                "color": { "type": "string", "value": "#22c55e" },
+                "backgroundColor": { "type": "string", "value": "rgba(15, 23, 42, 0.9)" },
+                "visible": { "type": "boolean", "value": true }
+              }
+            }
+          ]
+        },
+        {
+          "id": "ui-click-btn",
+          "name": "Collect Button",
+          "baseEntity": "ui",
+          "components": [
+            {
+              "id": "c-cb-b",
+              "name": "UI",
+              "tooltip": "UI",
+              "data": {
+                "type": { "type": "string", "value": "button" },
+                "text": { "type": "string", "value": "💎 Click to Mine (+1)" },
+                "x": { "type": "number", "value": 24 },
+                "y": { "type": "number", "value": 116 },
+                "width": { "type": "number", "value": 240 },
+                "height": { "type": "number", "value": 44 },
+                "fontSize": { "type": "number", "value": 14 },
+                "color": { "type": "string", "value": "#ffffff" },
+                "backgroundColor": { "type": "string", "value": "#0284c7" },
+                "visible": { "type": "boolean", "value": true }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "models": [],
+  "scripts": [
+    {
+      "id": "script-clicker",
+      "name": "JewelClickerLogic",
+      "stateData": {},
+      "scriptData": [
+        {
+          "code": "-- Jewel Clicker Game Script\nlocal score = 0\n\nUI.onClick(\"Collect Button\", function()\n    score = score + 1\n    UI.setText(\"Score Label\", \"Crystals Collected: \" .. tostring(score))\n    print(\"Mined crystal! New total:\", score)\nend)\n\n-- Smoothly rotate the jewel\nwhile true do\n    wait(0.016)\n    if Transform then\n        Transform.rotation.y = Transform.rotation.y + 0.02\n        Transform.rotation.x = Transform.rotation.x + 0.01\n    end\nend"
+        }
+      ]
+    }
+  ]
+}
