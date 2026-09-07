@@ -7,6 +7,7 @@ export class PlayerControllerSystem extends System {
     private onKeyDown: ((e: KeyboardEvent) => void) | null = null;
     private onKeyUp: ((e: KeyboardEvent) => void) | null = null;
     private groundedEntities = new Set<string>();
+    private spawnPoints = new Map<string, { x: number; y: number; z: number }>();
 
     constructor(camera?: THREE.Camera) {
         super();
@@ -23,6 +24,26 @@ export class PlayerControllerSystem extends System {
     }
 
     setup(entities: Entity[]): void {
+        this.spawnPoints.clear();
+        for (const entity of entities) {
+            const pc = entity.components.find(
+                (c) => c.name === "PlayerController",
+            );
+            const tc = entity.components.find((c) => c.name === "Transform");
+            if (pc && tc && tc.data.position?.value) {
+                const p = tc.data.position.value as {
+                    x: number;
+                    y: number;
+                    z: number;
+                };
+                this.spawnPoints.set(entity.id, {
+                    x: p.x || 0,
+                    y: p.y || 0,
+                    z: p.z || 0,
+                });
+            }
+        }
+
         this.onKeyDown = (e: KeyboardEvent) => {
             const tag = (e.target as HTMLElement)?.tagName;
             if (tag === "INPUT" || tag === "TEXTAREA") return;
@@ -64,6 +85,28 @@ export class PlayerControllerSystem extends System {
 
             const enabled = pcComp.data.enabled?.value !== false;
             if (!enabled) continue;
+
+            // Check void fall boundary (respawn)
+            const currentPos = transformComp.data.position.value as {
+                x: number;
+                y: number;
+                z: number;
+            };
+            if (currentPos && typeof currentPos.y === "number" && currentPos.y < -20) {
+                const spawn = this.spawnPoints.get(entity.id) ?? {
+                    x: 0,
+                    y: 1.5,
+                    z: 0,
+                };
+                currentPos.x = spawn.x;
+                currentPos.y = spawn.y + 0.5;
+                currentPos.z = spawn.z;
+                transformComp.data.position.dirty = true;
+                entity.events.emit("Physics.setVelocity", { x: 0, y: 0, z: 0 });
+                this.groundedEntities.add(entity.id);
+                entity.events.emit("player.respawned");
+                continue;
+            }
 
             const speed = Number(pcComp.data.speed?.value ?? 8);
             const jumpForce = Number(pcComp.data.jumpForce?.value ?? 9);

@@ -18,6 +18,15 @@ export class CameraSystem extends System {
     private lastMode: CameraMode | null = null;
     private lastFov: number | null = null;
 
+    // Third-person follow camera mouse look & orbit parameters
+    private followYaw = 0;
+    private followPitch = 0.35; // ~20 degrees downward tilt
+    private followDistance = 7.0;
+
+    private onCanvasClick: ((e: MouseEvent) => void) | null = null;
+    private onMouseMove: ((e: MouseEvent) => void) | null = null;
+    private onWheel: ((e: WheelEvent) => void) | null = null;
+
     constructor(
         scene: THREE.Scene,
         camera: THREE.PerspectiveCamera,
@@ -35,11 +44,95 @@ export class CameraSystem extends System {
 
     /** Provide the viewport canvas so the controls can attach event listeners. */
     setDomElement(el: HTMLElement | null): void {
+        this.detachDomListeners();
         this.domElement = el;
+        this.attachDomListeners();
         this.ensureControls();
     }
 
+    private attachDomListeners(): void {
+        if (!this.domElement) return;
+
+        this.onCanvasClick = (e: MouseEvent) => {
+            // Click to lock cursor for seamless 360 mouse-look
+            if (
+                e.button === 0 &&
+                document.pointerLockElement !== this.domElement &&
+                this.lastMode === "follow"
+            ) {
+                this.domElement?.requestPointerLock();
+            }
+        };
+
+        this.onMouseMove = (e: MouseEvent) => {
+            const isLocked = document.pointerLockElement === this.domElement;
+            const isRightDrag = (e.buttons & 2) !== 0; // right-click drag orbit
+
+            if (isLocked || isRightDrag) {
+                this.followYaw -= e.movementX * 0.003;
+                this.followPitch = Math.max(
+                    -0.2,
+                    Math.min(1.25, this.followPitch + e.movementY * 0.003),
+                );
+            }
+        };
+
+        this.onWheel = (e: WheelEvent) => {
+            this.followDistance = Math.max(
+                2.5,
+                Math.min(25, this.followDistance + e.deltaY * 0.005),
+            );
+        };
+
+        this.domElement.addEventListener("click", this.onCanvasClick);
+        window.addEventListener("mousemove", this.onMouseMove);
+        this.domElement.addEventListener("wheel", this.onWheel, {
+            passive: true,
+        });
+    }
+
+    private detachDomListeners(): void {
+        if (this.domElement && this.onCanvasClick) {
+            this.domElement.removeEventListener("click", this.onCanvasClick);
+        }
+        if (this.onMouseMove) {
+            window.removeEventListener("mousemove", this.onMouseMove);
+        }
+        if (this.domElement && this.onWheel) {
+            this.domElement.removeEventListener("wheel", this.onWheel);
+        }
+        if (
+            this.domElement &&
+            document.pointerLockElement === this.domElement
+        ) {
+            document.exitPointerLock();
+        }
+    }
+
     setup(_entities: Entity[]): void {}
+
+    private updateFollowCamera(targetPos: {
+        x: number;
+        y: number;
+        z: number;
+    }): void {
+        if (!this.camera) return;
+
+        const horizontalDist = this.followDistance * Math.cos(this.followPitch);
+        const verticalDist = this.followDistance * Math.sin(this.followPitch);
+
+        const offsetX = horizontalDist * Math.sin(this.followYaw);
+        const offsetZ = horizontalDist * Math.cos(this.followYaw);
+        const offsetY = verticalDist + 1.2;
+
+        const desired = new THREE.Vector3(
+            targetPos.x + offsetX,
+            targetPos.y + offsetY,
+            targetPos.z + offsetZ,
+        );
+        this.camera.position.lerp(desired, 0.12);
+        this.camera.lookAt(targetPos.x, targetPos.y + 1.2, targetPos.z);
+    }
 
     update(_deltaTime: number, entities: Entity[]): void {
         if (!this.camera) return;
@@ -51,20 +144,16 @@ export class CameraSystem extends System {
                 e.components.some((c) => c.name === "PlayerController"),
             );
             if (player) {
-                const pt = player.components.find((c) => c.name === "Transform");
-                if (pt) {
+                const pt = player.components.find(
+                    (c) => c.name === "Transform",
+                );
+                if (pt && pt.data.position?.value) {
                     const p = pt.data.position.value as {
                         x: number;
                         y: number;
                         z: number;
                     };
-                    const desired = new THREE.Vector3(
-                        p.x,
-                        p.y + 3.5,
-                        p.z + 6.5,
-                    );
-                    this.camera.position.lerp(desired, 0.08);
-                    this.camera.lookAt(p.x, p.y + 1.2, p.z);
+                    this.updateFollowCamera(p);
                     return;
                 }
             }
@@ -113,20 +202,16 @@ export class CameraSystem extends System {
                     ) || e.name === "Player",
             );
             if (player) {
-                const pt = player.components.find((c) => c.name === "Transform");
+                const pt = player.components.find(
+                    (c) => c.name === "Transform",
+                );
                 if (pt && pt.data.position?.value) {
                     const p = pt.data.position.value as {
                         x: number;
                         y: number;
                         z: number;
                     };
-                    const desired = new THREE.Vector3(
-                        p.x,
-                        p.y + 3.5,
-                        p.z + 6.5,
-                    );
-                    this.camera.position.lerp(desired, 0.08);
-                    this.camera.lookAt(p.x, p.y + 1.2, p.z);
+                    this.updateFollowCamera(p);
                 }
             } else {
                 this.applyTransformToCamera(transformComp);
@@ -162,6 +247,7 @@ export class CameraSystem extends System {
     }
 
     cleanup(): void {
+        this.detachDomListeners();
         this.orbitControls?.dispose();
         this.firstPersonControls?.dispose();
         this.flyControls?.dispose();
@@ -186,12 +272,20 @@ export class CameraSystem extends System {
 
     private applyTransformToCamera(transformComp: Component): void {
         if (!this.camera) return;
-        const p = (transformComp.data.position?.value ?? { x: 0, y: 0, z: 0 }) as {
+        const p = (transformComp.data.position?.value ?? {
+            x: 0,
+            y: 0,
+            z: 0,
+        }) as {
             x: number;
             y: number;
             z: number;
         };
-        const r = (transformComp.data.rotation?.value ?? { x: 0, y: 0, z: 0 }) as {
+        const r = (transformComp.data.rotation?.value ?? {
+            x: 0,
+            y: 0,
+            z: 0,
+        }) as {
             x: number;
             y: number;
             z: number;

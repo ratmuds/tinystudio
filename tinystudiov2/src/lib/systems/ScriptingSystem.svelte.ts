@@ -5,12 +5,21 @@ import { EventEmitter } from "$lib/stores/EventEmitter";
 import { LuaFactory, type LuaEngine, type LuaThread } from "wasmoon";
 import { StateScope, SchedulerJob } from "./ScriptScheduler";
 import { runtimeMetrics } from "$lib/stores/runtimeMetrics.svelte";
+import {
+    MathModule,
+    CoreModule,
+    EntityModule,
+    InputModule,
+    UIModule,
+    CameraModule,
+    type ScriptContext,
+    type ScriptModule,
+} from "./scripting";
 
 const factory = new LuaFactory();
 
 function extractLuaError(raw: unknown): string {
     const str = String(raw);
-    // wasmoon embeds JS source code when callbacks throw; pull out the actual error
     const lines = str.split("\n");
     for (const line of lines) {
         const match = line.match(
@@ -43,6 +52,15 @@ export class ScriptingSystem extends System {
     private onWheel: ((e: WheelEvent) => void) | null = null;
     private scopes = new Map<string, { lua: LuaEngine; scope: StateScope }>();
 
+    private modules: ScriptModule[] = [
+        new MathModule(),
+        new CoreModule(),
+        new EntityModule(),
+        new InputModule(),
+        new UIModule(),
+        new CameraModule(),
+    ];
+
     constructor(scene: THREE.Scene, gameData: GameData) {
         super();
         this.id = crypto.randomUUID();
@@ -69,8 +87,8 @@ export class ScriptingSystem extends System {
         window.addEventListener("keydown", this.onKeyDown);
         window.addEventListener("keyup", this.onKeyUp);
 
-        // Pointer / mouse input. Position is normalized to [0..1] relative to
-        // the window; delta is in raw pixels since the last frame.
+        // Pointer / mouse input. Position is normalized to [0..1] relative to the window;
+        // delta is in raw pixels since the last frame.
         this.onPointerMove = (e: PointerEvent) => {
             this.mousePosition.x = e.clientX / window.innerWidth;
             this.mousePosition.y = e.clientY / window.innerHeight;
@@ -127,648 +145,29 @@ export class ScriptingSystem extends System {
         );
     }
 
+    private createContext(): ScriptContext {
+        return {
+            getEntities: () => this.entities,
+            removeEntity: (id: string) => {
+                this.entities = this.entities.filter((e) => e.id !== id);
+            },
+            getKeysPressed: () => this.keysPressed,
+            getMouseButtons: () => this.mouseButtons,
+            getMousePosition: () => this.mousePosition,
+            getMouseDelta: () => this.mouseDelta,
+            getScrollY: () => this.scrollY,
+            getInputEvents: () => this.inputManagerEvents,
+            dispatchCallback: (scope, callbackId, args, name) => {
+                this.dispatchCallback(scope, callbackId, args, name);
+            },
+        };
+    }
+
     private registerGlobals(lua: LuaEngine, scope: StateScope): void {
-        // 1. Vector3 Metatable
-        lua.doStringSync(`
-            Vector3 = {}
-            Vector3.__index = Vector3
-
-            function Vector3.new(x, y, z)
-                return setmetatable({ x = x or 0, y = y or 0, z = z or 0 }, Vector3)
-            end
-
-            function Vector3:__tostring()
-                return string.format("Vector3(%.4f, %.4f, %.4f)", self.x, self.y, self.z)
-            end
-
-            function Vector3.__add(a, b)
-                return Vector3.new(a.x + b.x, a.y + b.y, a.z + b.z)
-            end
-
-            function Vector3.__sub(a, b)
-                return Vector3.new(a.x - b.x, a.y - b.y, a.z - b.z)
-            end
-
-            function Vector3.__mul(a, b)
-                if type(a) == "number" then
-                    return Vector3.new(b.x * a, b.y * a, b.z * a)
-                elseif type(b) == "number" then
-                    return Vector3.new(a.x * b, a.y * b, a.z * b)
-                end
-                return Vector3.new(a.x * b.x, a.y * b.y, a.z * b.z)
-            end
-
-            function Vector3:length()
-                return math.sqrt(self.x * self.x + self.y * self.y + self.z * self.z)
-            end
-
-            function Vector3:normalized()
-                local len = self:length()
-                if len == 0 then return Vector3.new(0, 0, 0) end
-                return Vector3.new(self.x / len, self.y / len, self.z / len)
-            end
-
-            function Vector3:dot(other)
-                return self.x * other.x + self.y * other.y + self.z * other.z
-            end
-
-            function Vector3:cross(other)
-                return Vector3.new(
-                    self.y * other.z - self.z * other.y,
-                    self.z * other.x - self.x * other.z,
-                    self.x * other.y - self.y * other.x
-                )
-            end
-
-            function Vector3.__div(a, b)
-                if type(b) == "number" then
-                    return Vector3.new(a.x / b, a.y / b, a.z / b)
-                end
-                return Vector3.new(a.x / b.x, a.y / b.y, a.z / b.z)
-            end
-
-            function Vector3:clone()
-                return Vector3.new(self.x, self.y, self.z)
-            end
-
-            function Vector3:distance(other)
-                local dx = self.x - other.x
-                local dy = self.y - other.y
-                local dz = self.z - other.z
-                return math.sqrt(dx * dx + dy * dy + dz * dz)
-            end
-
-            function Vector3:lerp(other, t)
-                t = t or 0.5
-                return Vector3.new(
-                    self.x + (other.x - self.x) * t,
-                    self.y + (other.y - self.y) * t,
-                    self.z + (other.z - self.z) * t
-                )
-            end
-
-            -- Yaw/pitch are in radians and match the Camera component's
-            -- orbit yaw/pitch, so they can drive the camera directly.
-            function Vector3:getYaw()
-                return math.atan2(self.x, self.z)
-            end
-
-            function Vector3:setYaw(yaw)
-                local lenXZ = math.sqrt(self.x * self.x + self.z * self.z)
-                self.x = math.sin(yaw) * lenXZ
-                self.z = math.cos(yaw) * lenXZ
-                return self
-            end
-
-            function Vector3:getPitch()
-                return math.atan2(self.y, math.sqrt(self.x * self.x + self.z * self.z))
-            end
-
-            function Vector3:setPitch(pitch)
-                local len = self:length()
-                if len == 0 then return self end
-                self.y = math.sin(pitch) * len
-                local lenXZ = math.cos(pitch) * len
-                local yaw = self:getYaw()
-                self.x = math.sin(yaw) * lenXZ
-                self.z = math.cos(yaw) * lenXZ
-                return self
-            end
-
-            Vector3.zero = Vector3.new(0, 0, 0)
-            Vector3.one = Vector3.new(1, 1, 1)
-            Vector3.up = Vector3.new(0, 1, 0)
-            Vector3.down = Vector3.new(0, -1, 0)
-            Vector3.right = Vector3.new(1, 0, 0)
-            Vector3.left = Vector3.new(-1, 0, 0)
-            Vector3.forward = Vector3.new(0, 0, -1)
-            Vector3.back = Vector3.new(0, 0, 1)
-        `);
-
-        // 1b. Vector2 Metatable
-        lua.doStringSync(`
-            Vector2 = {}
-            Vector2.__index = Vector2
-
-            function Vector2.new(x, y)
-                return setmetatable({ x = x or 0, y = y or 0 }, Vector2)
-            end
-
-            function Vector2:__tostring()
-                return string.format("Vector2(%.4f, %.4f)", self.x, self.y)
-            end
-
-            function Vector2.__add(a, b)
-                return Vector2.new(a.x + b.x, a.y + b.y)
-            end
-
-            function Vector2.__sub(a, b)
-                return Vector2.new(a.x - b.x, a.y - b.y)
-            end
-
-            function Vector2.__mul(a, b)
-                if type(a) == "number" then
-                    return Vector2.new(b.x * a, b.y * a)
-                elseif type(b) == "number" then
-                    return Vector2.new(a.x * b, a.y * b)
-                end
-                return Vector2.new(a.x * b.x, a.y * b.y)
-            end
-
-            function Vector2:length()
-                return math.sqrt(self.x * self.x + self.y * self.y)
-            end
-        `);
-
-        // 2. Entity, component, and component-data metatables
-        lua.global.set(
-            "__warnUnsupportedComponentData",
-            (componentName: string, key: string, type: string) => {
-                console.warn(
-                    `Lua component data "${componentName}.${key}" uses unsupported type "${type}". ` +
-                        "Only string, number, boolean, and vector3 are currently supported.",
-                );
-            },
-        );
-
-        lua.doStringSync(`
-            Entity = {}
-            Component = {}
-            __eventCallbacks = {}
-            __nextEventCallbackId = 0
-
-            function __registerEventCallback(callback)
-                __nextEventCallbackId = __nextEventCallbackId + 1
-                local id = tostring(__nextEventCallbackId)
-                __eventCallbacks[id] = callback
-                return id
-            end
-
-            function __dispatchEventCallback(id, ...)
-                local callback = __eventCallbacks[id]
-                if not callback then return nil end
-
-                return coroutine.create(function(...)
-                    local count = select("#", ...)
-                    local converted = {}
-                    for i = 1, count do
-                        local value = select(i, ...)
-                        if (type(value) == "table" or type(value) == "userdata") and value.id then
-                            local wrapped = getEntityById(value.id)
-                            if wrapped then value = wrapped end
-                        end
-                        converted[i] = value
-                    end
-                    callback(table.unpack(converted, 1, count))
-                end)
-            end
-
-            function __createLiveVector3(entry)
-                local v = {
-                    x = entry.value.x or 0,
-                    y = entry.value.y or 0,
-                    z = entry.value.z or 0
-                }
-                local mt = {
-                    __index = function(t, k)
-                        if Vector3[k] then return Vector3[k] end
-                        return rawget(t, k)
-                    end,
-                    __newindex = function(t, k, val)
-                        rawset(t, k, val)
-                        if k == "x" or k == "y" or k == "z" then
-                            entry.value[k] = val
-                            entry.dirty = true
-                        end
-                    end,
-                    __tostring = Vector3.__tostring,
-                    __add = Vector3.__add,
-                    __sub = Vector3.__sub,
-                    __mul = Vector3.__mul,
-                    __div = Vector3.__div,
-                }
-                return setmetatable(v, mt)
-            end
-
-            function Entity:_findComponent(name)
-                if not self._components then return nil end
-                local len = self._components.length or #self._components
-                for i = 1, len do
-                    local comp = self._components[i]
-                    if comp and comp.name == name then
-                        return comp
-                    end
-                end
-                return nil
-            end
-
-            function Component:__index(key)
-                if key == "on" or key == "off" or key == "emit" or key == "applyImpulse" or key == "setVelocity" then
-                    return rawget(Component, key)
-                end
-
-                local comp = rawget(self, "_component")
-                local entry = comp.data[key]
-                if not entry then return nil end
-
-                if entry.type == "string" or entry.type == "number" or entry.type == "boolean" or entry.type == "color" then
-                    return entry.value
-                elseif entry.type == "vector3" then
-                    return __createLiveVector3(entry)
-                else
-                    __warnUnsupportedComponentData(comp.name, key, entry.type)
-                    return nil
-                end
-            end
-
-            function Component:__newindex(key, value)
-                local comp = rawget(self, "_component")
-                local entry = comp.data[key]
-                if not entry then
-                    rawset(self, key, value)
-                    return
-                end
-
-                if entry.type == "string" or entry.type == "color" then
-                    entry.value = tostring(value)
-                    entry.dirty = true
-                elseif entry.type == "number" then
-                    if type(value) ~= "number" then return end
-                    entry.value = value
-                    entry.dirty = true
-                elseif entry.type == "boolean" then
-                    if type(value) ~= "boolean" then return end
-                    entry.value = value
-                    entry.dirty = true
-                elseif entry.type == "vector3" then
-                    if not value then return end
-                    entry.value = {
-                        x = value.x or 0,
-                        y = value.y or 0,
-                        z = value.z or 0
-                    }
-                    entry.dirty = true
-                else
-                    __warnUnsupportedComponentData(comp.name, key, entry.type)
-                end
-            end
-
-            function Component:applyImpulse(x, y, z)
-                local entity = rawget(self, "_entity")
-                if not entity then return end
-                if type(x) == "table" then
-                    __entityEmit(entity.id, "Physics.applyImpulse", { x = x.x or 0, y = x.y or 0, z = x.z or 0 })
-                else
-                    __entityEmit(entity.id, "Physics.applyImpulse", { x = x or 0, y = y or 0, z = z or 0 })
-                end
-            end
-
-            function Component:setVelocity(x, y, z)
-                local entity = rawget(self, "_entity")
-                if not entity then return end
-                if type(x) == "table" then
-                    __entityEmit(entity.id, "Physics.setVelocity", { x = x.x or 0, y = x.y or 0, z = x.z or 0 })
-                else
-                    __entityEmit(entity.id, "Physics.setVelocity", { x = x or 0, y = y or 0, z = z or 0 })
-                end
-            end
-
-            -- Component event helpers. "part.physics:on('touched', cb)" is an
-            -- alias for "part:on('Physics.touched', cb)" — the component name
-            -- prefixes the event name automatically.
-            function Component:on(eventName, callback)
-                local comp = rawget(self, "_component")
-                local entity = rawget(self, "_entity")
-                if not comp or not entity then return nil end
-                local callbackId = __registerEventCallback(callback)
-                return __entityOn(entity.id, comp.name .. "." .. eventName, callbackId)
-            end
-
-            function Component:off(listenerId)
-                local entity = rawget(self, "_entity")
-                if entity then __entityOff(entity.id, listenerId) end
-            end
-
-            function Component:emit(eventName, ...)
-                local comp = rawget(self, "_component")
-                local entity = rawget(self, "_entity")
-                if not comp or not entity then return end
-                __entityEmit(entity.id, comp.name .. "." .. eventName, ...)
-            end
-
-            function Entity:__index(key)
-                local method = rawget(Entity, key)
-                if method then return method end
-
-                local component = self:_findComponent(key:gsub("^%l", string.upper))
-                if component then
-                    return setmetatable(
-                        { _component = component, _entity = self },
-                        Component
-                    )
-                end
-                return nil
-            end
-
-            function Entity:__newindex(key, value)
-                rawset(self, key, value)
-            end
-
-            function Entity:on(eventName, callback)
-                local callbackId = __registerEventCallback(callback)
-                return __entityOn(self.id, eventName, callbackId)
-            end
-
-            function Entity:off(listenerId)
-                __entityOff(self.id, listenerId)
-            end
-
-            function Entity:destroy()
-                __destroyEntityJS(self.id)
-            end
-
-            function Entity:emit(eventName, ...)
-                __entityEmit(self.id, eventName, ...)
-            end
-
-            game = {
-                inputManager = {
-                    isKeyPressed = function(keyCode)
-                        return __isKeyPressedJS(keyCode)
-                    end,
-                    isMouseButtonDown = function(button)
-                        return __isMouseButtonDownJS(button)
-                    end,
-                    getMousePosition = function()
-                        local p = __getMousePositionJS()
-                        return Vector2.new(p[1] or 0, p[2] or 0)
-                    end,
-                    getMouseDelta = function()
-                        local p = __getMouseDeltaJS()
-                        return Vector2.new(p[1] or 0, p[2] or 0)
-                    end,
-                    getScroll = function()
-                        return __getScrollJS()
-                    end,
-                    on = function(self, eventName, callback)
-                        local callbackId = __registerEventCallback(callback)
-                        return __inputManagerOn(eventName, callbackId)
-                    end,
-                    off = function(self, listenerId)
-                        __inputManagerOff(listenerId)
-                    end
-                },
-                setActiveCamera = function(entityId)
-                    return __setActiveCameraJS(entityId)
-                end,
-                getActiveCamera = function()
-                    local id = __getActiveCameraJS()
-                    if not id then return nil end
-                    return getEntityById(id)
-                end
-            }
-
-            Input = game.inputManager
-            Input.isKeyDown = function(keyCode) return __isKeyPressedJS(keyCode) end
-
-            function wait(seconds)
-                coroutine.yield(seconds or 0)
-            end
-
-            UI = {
-                setText = function(target, text)
-                    return __uiSetPropertyJS(target, "text", tostring(text))
-                end,
-                getText = function(target)
-                    return __uiGetPropertyJS(target, "text") or ""
-                end,
-                setColor = function(target, color)
-                    return __uiSetPropertyJS(target, "color", tostring(color))
-                end,
-                setBackgroundColor = function(target, color)
-                    return __uiSetPropertyJS(target, "backgroundColor", tostring(color))
-                end,
-                setVisible = function(target, visible)
-                    return __uiSetPropertyJS(target, "visible", visible and true or false)
-                end,
-                onClick = function(target, callback)
-                    local callbackId = __registerEventCallback(callback)
-                    return __uiOnClickJS(target, callbackId)
-                end
-            }
-        `);
-
-        // 3. JS Data Fetching Helpers (pure functions, no Lua re-entry)
-        lua.global.set("__findEntityByIdJS", (id: string) => {
-            return this.entities.find((e) => e.id === id) ?? false;
-        });
-
-        lua.global.set("__findEntityByNameJS", (name: string) => {
-            return this.entities.find((e) => e.name === name) ?? false;
-        });
-
-        lua.global.set("__isKeyPressedJS", (keyCode: string) => {
-            return this.keysPressed.has(keyCode);
-        });
-
-        lua.global.set("__isMouseButtonDownJS", (button: number) => {
-            return this.mouseButtons.has(button);
-        });
-
-        lua.global.set("__getMousePositionJS", () => {
-            return [this.mousePosition.x, this.mousePosition.y];
-        });
-
-        lua.global.set("__getMouseDeltaJS", () => {
-            return [this.mouseDelta.x, this.mouseDelta.y];
-        });
-
-        lua.global.set("__getScrollJS", () => {
-            return this.scrollY;
-        });
-
-        lua.global.set("__destroyEntityJS", (id: string) => {
-            const entity = this.entities.find((e) => e.id === id);
-            if (entity) {
-                entity.events.emit("Physics.destroyBody");
-                entity.events.emit("entity.destroyed");
-            }
-            this.entities = this.entities.filter((e) => e.id !== id);
-        });
-
-        // Camera selection. The active camera is the entity with a Camera
-        // component whose `active` flag is true (falling back to the first
-        // one). Setting it flips `active` on all camera entities so the
-        // CameraSystem picks the right one next frame.
-        lua.global.set("__getActiveCameraJS", () => {
-            const cameras = this.entities.filter((e) =>
-                e.components.some((c) => c.name === "Camera"),
-            );
-            const active =
-                cameras.find((e) => {
-                    const comp = e.components.find(
-                        (c) => c.name === "Camera",
-                    );
-                    return comp?.data.active.value === true;
-                }) ?? cameras[0];
-            return active ? active.id : false;
-        });
-
-        lua.global.set("__setActiveCameraJS", (entityId: string) => {
-            let found = false;
-            for (const e of this.entities) {
-                const comp = e.components.find((c) => c.name === "Camera");
-                if (!comp) continue;
-                const active = e.id === entityId;
-                if (active) found = true;
-                comp.data.active.value = active;
-                comp.data.active.dirty = true;
-            }
-            return found;
-        });
-
-        lua.global.set(
-            "__inputManagerOn",
-            (eventName: string, callbackId: string) => {
-                const dispatch = (...args: any[]) => {
-                    this.dispatchCallback(
-                        scope,
-                        callbackId,
-                        args,
-                        `inputManager.${eventName}`,
-                    );
-                };
-                const listenerId = this.inputManagerEvents.on(
-                    eventName,
-                    dispatch,
-                    scope,
-                );
-                scope.registrations.push({
-                    emitter: this.inputManagerEvents,
-                    listenerId,
-                });
-                return listenerId;
-            },
-        );
-
-        lua.global.set("__inputManagerOff", (id: string) => {
-            scope.removeRegistration(id);
-        });
-
-        lua.global.set(
-            "__entityOn",
-            (entityId: string, eventName: string, callbackId: string) => {
-                const entity = this.entities.find((e) => e.id === entityId);
-                if (!entity) return undefined;
-
-                const dispatch = (...args: any[]) => {
-                    this.dispatchCallback(
-                        scope,
-                        callbackId,
-                        args,
-                        `${entity.name}.${eventName}`,
-                    );
-                };
-                const listenerId = entity.events.on(eventName, dispatch, scope);
-                scope.registrations.push({
-                    emitter: entity.events,
-                    listenerId,
-                });
-                return listenerId;
-            },
-        );
-
-        lua.global.set("__entityOff", (_entityId: string, id: string) => {
-            scope.removeRegistration(id);
-        });
-
-        lua.global.set(
-            "__entityEmit",
-            (entityId: string, eventName: string, ...args: any[]) => {
-                const entity = this.entities.find((e) => e.id === entityId);
-                if (entity) entity.events.emit(eventName, ...args);
-            },
-        );
-
-        // UI Helpers
-        lua.global.set(
-            "__uiSetPropertyJS",
-            (targetNameOrId: string, prop: string, val: any) => {
-                const entity = this.entities.find(
-                    (e) => e.id === targetNameOrId || e.name === targetNameOrId,
-                );
-                if (!entity) return false;
-                const uiComp = entity.components.find((c) => c.name === "UI");
-                if (!uiComp || !uiComp.data[prop]) return false;
-                uiComp.data[prop].value = val;
-                uiComp.data[prop].dirty = true;
-                return true;
-            },
-        );
-
-        lua.global.set(
-            "__uiGetPropertyJS",
-            (targetNameOrId: string, prop: string) => {
-                const entity = this.entities.find(
-                    (e) => e.id === targetNameOrId || e.name === targetNameOrId,
-                );
-                if (!entity) return null;
-                const uiComp = entity.components.find((c) => c.name === "UI");
-                if (!uiComp || !uiComp.data[prop]) return null;
-                return uiComp.data[prop].value;
-            },
-        );
-
-        lua.global.set(
-            "__uiOnClickJS",
-            (targetNameOrId: string, callbackId: string) => {
-                const entity = this.entities.find(
-                    (e) => e.id === targetNameOrId || e.name === targetNameOrId,
-                );
-                if (!entity) return undefined;
-                const dispatch = (...args: any[]) => {
-                    this.dispatchCallback(
-                        scope,
-                        callbackId,
-                        args,
-                        `${entity.name}.UI.click`,
-                    );
-                };
-                const listenerId = entity.events.on("UI.click", dispatch, scope);
-                scope.registrations.push({
-                    emitter: entity.events,
-                    listenerId,
-                });
-                return listenerId;
-            },
-        );
-
-        // 4. Native Lua constructors for Entities (attaches Entity metatable directly in Lua)
-        lua.doStringSync(`
-            function getEntityById(id)
-                local raw = __findEntityByIdJS(id)
-                if not raw then return nil end
-                local e = {
-                    id = raw.id,
-                    name = raw.name,
-                    _components = raw.components,
-                    events = raw.events
-                }
-                return setmetatable(e, Entity)
-            end
-
-            function getEntityByName(name)
-                local raw = __findEntityByNameJS(name)
-                if not raw then return nil end
-                local e = {
-                    id = raw.id,
-                    name = raw.name,
-                    _components = raw.components,
-                    events = raw.events
-                }
-                return setmetatable(e, Entity)
-            end
-        `);
+        const ctx = this.createContext();
+        for (const mod of this.modules) {
+            mod.register(lua, scope, ctx);
+        }
     }
 
     async startScript(entity: Entity): Promise<void> {
@@ -841,7 +240,7 @@ export class ScriptingSystem extends System {
     }
 
     // Resolve which code block to run for a script. If the script has a state
-    // graph, follow it from the "start" node (existing behavior). Otherwise run first block.
+    // graph, follow it from the "start" node. Otherwise run first block.
     private resolveScriptCode(scriptData: ScriptData): string | undefined {
         const stateData = scriptData.stateData ?? {};
         const edges: any[] = Array.isArray(stateData.edges)
@@ -869,9 +268,6 @@ export class ScriptingSystem extends System {
         }
 
         // No usable graph: run the first block that has real code.
-        console.warn(
-            `Script "${scriptData.name}" has no valid state graph; running first code block.`,
-        );
         return scriptData.scriptData.find(
             (s) => s && typeof s.code === "string" && s.code.trim().length > 0,
         )?.code;
