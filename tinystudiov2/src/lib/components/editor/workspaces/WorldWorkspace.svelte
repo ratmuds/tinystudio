@@ -23,6 +23,8 @@
         Camera,
         Layout,
         Gamepad2,
+        Eye,
+        EyeOff,
     } from "@lucide/svelte";
 
     import { GameData, WorldData, ModelData } from "$lib/stores/data.svelte";
@@ -38,7 +40,7 @@
         type CameraHelperEntry,
     } from "$lib/utils/cameraHelper";
 
-    // ─── Props from parent ──────────────────────────────────────────────
+    //  Props from parent 
     let {
         worldData,
         gameData,
@@ -47,7 +49,7 @@
         gameData: GameData;
     } = $props();
 
-    // ─── Three.js scene ─────────────────────────────────────────────────
+    //  Three.js scene 
     let scene = new THREE.Scene();
     scene.background = new THREE.Color(0x1a1a2e);
     scene.fog = new THREE.Fog(0x1a1a2e, 20, 60);
@@ -67,7 +69,7 @@
     camera.position.set(6, 5, 8);
     camera.lookAt(0, 0, 0);
 
-    // ─── Tool / selection state ─────────────────────────────────────────
+    //  Tool / selection state 
     let rendererTransformControls = $state<TransformControls | null>(null);
     let isTransformDragging = $state(false);
     let selectionMode = $state<"part" | "face" | "model">("part");
@@ -76,8 +78,9 @@
     let selectedFaces = $state<
         { entityId: string; faceIndex: number; mesh: THREE.Mesh }[]
     >([]);
+    let showUIPreview = $state(true);
 
-    // ─── ECS ↔ Three.js sync ────────────────────────────────────────────
+    //  ECS ↔ Three.js sync 
     // Maps world entity ID → Three.js group (contains all meshes for that model instance)
     const groupByEntityId = new Map<string, THREE.Group>();
     // Maps world entity ID → camera debug helper (frustum + pick body).
@@ -145,7 +148,7 @@
                 group.add(mesh);
             }
         } else if (meshComp) {
-            // A raw part placed directly in the world.
+            // A raw part placed directly in the world
             const geomType = meshComp.data.geometryType.value as string;
             const size = meshComp.data.size.value as Vec3;
             const color = meshComp.data.color.value as number;
@@ -204,7 +207,7 @@
         }
 
         // For raw parts placed directly in the world, keep the mesh in sync
-        // with Mesh component edits (size/type/color).
+        // with Mesh component edits (size/type/color)
         const meshComp = entity.components.find((c) => c.name === "Mesh");
         if (meshComp) {
             const mesh = group.children.find(
@@ -464,7 +467,7 @@
         }
     }
 
-    // ─── TransformControls → ECS sync ──────────────────────────────────
+    //  TransformControls → ECS sync 
     $effect(() => {
         const tc = rendererTransformControls;
         if (!tc) return;
@@ -522,7 +525,7 @@
         };
     });
 
-    // ─── ECS → Three.js sync (sidebar edits update the rendered groups) ───
+    //  ECS → Three.js sync (sidebar edits update the rendered groups) 
     $effect(() => {
         const entities = worldData.entities;
         const seenIds = new Set<string>();
@@ -792,6 +795,72 @@
                     bind:selectedFaces
                     addLights={false}
                 />
+
+                <!-- Floating UI preview toggle in viewport -->
+                <div class="absolute right-3 top-3 z-30 flex items-center gap-2">
+                    <button
+                        type="button"
+                        class="flex items-center gap-1.5 rounded-md border border-border/60 bg-background/85 px-2.5 py-1 text-xs font-medium text-foreground shadow-sm backdrop-blur-md transition-all hover:bg-background active:scale-95 cursor-pointer"
+                        onclick={() => (showUIPreview = !showUIPreview)}
+                        title="Toggle UI preview in viewport"
+                    >
+                        {#if showUIPreview}
+                            <Eye class="h-3.5 w-3.5 text-green-500" />
+                            <span>UI Preview</span>
+                        {:else}
+                            <EyeOff class="h-3.5 w-3.5 text-muted-foreground" />
+                            <span class="text-muted-foreground">UI Preview</span>
+                        {/if}
+                    </button>
+                </div>
+
+                {#if showUIPreview}
+                    <!-- Screen UI Preview Overlay -->
+                    <div class="pointer-events-none absolute inset-0 z-20 overflow-hidden select-none">
+                        {#each worldData.entities as entity (entity.id)}
+                            {@const uiComp = entity.components.find((c) => c.name === "UI")}
+                            {#if uiComp && uiComp.data.visible?.value !== false}
+                                {@const type = uiComp.data.type?.value ?? "button"}
+                                {@const text = String(uiComp.data.text?.value ?? "")}
+                                {@const x = Number(uiComp.data.x?.value ?? 20)}
+                                {@const y = Number(uiComp.data.y?.value ?? 20)}
+                                {@const w = Number(uiComp.data.width?.value ?? 120)}
+                                {@const h = Number(uiComp.data.height?.value ?? 40)}
+                                {@const color = String(uiComp.data.color?.value ?? "#ffffff")}
+                                {@const bg = String(uiComp.data.backgroundColor?.value ?? (type === "button" ? "#22c55e" : "transparent"))}
+                                {@const size = Number(uiComp.data.fontSize?.value ?? 14)}
+                                {@const isSelected = selectedPartIds.includes(entity.id)}
+
+                                <div
+                                    class="pointer-events-auto absolute flex items-center justify-center rounded-lg font-semibold transition-all cursor-pointer {isSelected
+                                        ? 'ring-2 ring-green-400 ring-offset-2 ring-offset-background/80 shadow-lg'
+                                        : 'hover:ring-1 hover:ring-white/50 shadow-md'}"
+                                    style="left: {x}px; top: {y}px; width: {w}px; height: {h}px; color: {color}; background-color: {bg}; font-size: {size}px;"
+                                    onclick={(e) => {
+                                        e.stopPropagation();
+                                        selectedPartIds = [entity.id];
+                                    }}
+                                    role="button"
+                                    tabindex="0"
+                                    onkeydown={(e) => {
+                                        if (e.key === "Enter" || e.key === " ") {
+                                            e.stopPropagation();
+                                            selectedPartIds = [entity.id];
+                                        }
+                                    }}
+                                    title="{entity.name} (Click to inspect)"
+                                >
+                                    {text}
+                                    {#if isSelected}
+                                        <span class="absolute -top-5 left-0 rounded bg-green-500 px-1.5 py-0.5 text-[9px] font-mono font-bold text-black uppercase tracking-wider shadow">
+                                            UI: {entity.name}
+                                        </span>
+                                    {/if}
+                                </div>
+                            {/if}
+                        {/each}
+                    </div>
+                {/if}
             </div>
 
             <!-- Toolbar -->
@@ -934,6 +1003,29 @@
                             >
                             <Tooltip.Content>
                                 <p>Select Models</p>
+                            </Tooltip.Content>
+                        </Tooltip.Root>
+                    </Tooltip.Provider>
+                </div>
+
+                <div class="flex items-center gap-1 rounded-lg bg-muted p-1">
+                    <Tooltip.Provider>
+                        <Tooltip.Root>
+                            <Tooltip.Trigger
+                                onclick={() => (showUIPreview = !showUIPreview)}
+                                class="rounded-md px-3 py-3 text-sm font-bold tracking-wide shadow-sm duration-150 {showUIPreview
+                                    ? 'bg-background text-green-500'
+                                    : 'text-muted-foreground hover:bg-background/50'}"
+                                aria-label="Toggle UI Preview"
+                            >
+                                {#if showUIPreview}
+                                    <Eye class="h-4 w-4" />
+                                {:else}
+                                    <EyeOff class="h-4 w-4" />
+                                {/if}
+                            </Tooltip.Trigger>
+                            <Tooltip.Content>
+                                <p>Toggle UI Preview</p>
                             </Tooltip.Content>
                         </Tooltip.Root>
                     </Tooltip.Provider>

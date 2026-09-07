@@ -5,3 +5,5 @@ export * from "./modules/EntityModule";
 export * from "./modules/InputModule";
 export * from "./modules/UIModule";
 export * from "./modules/CameraModule";
+export * from "./modules/StateModule";
+export * from "./modules/TimeModule";

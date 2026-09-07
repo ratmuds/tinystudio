@@ -1,7 +1,7 @@
 <script lang="ts">
     import * as THREE from "three";
     import Renderer from "$lib/components/editor/Renderer.svelte";
-    import { Play, Square } from "@lucide/svelte";
+    import { Play, Square, Eye, EyeOff } from "@lucide/svelte";
     import SchedulerPanel from "$lib/components/editor/SchedulerPanel.svelte";
 
     import { untrack } from "svelte";
@@ -41,6 +41,7 @@
     // mutate these clones instead of the source game data, which is reset to
     // [] on stop.
     let runtimeEntities: Entity[] = $state([]);
+    let showUI = $state(true);
 
     function matrixFromTransform(transform: Component): THREE.Matrix4 {
         const p = (transform.data.position.value as any) ?? {
@@ -98,6 +99,7 @@
                 tooltip: c.tooltip,
                 data: structuredClone($state.snapshot(c.data)),
             })),
+            tags: entity.tags ? [...entity.tags] : [],
             children: [],
             events: new EventEmitter(),
         } as Entity;
@@ -168,10 +170,13 @@
         return out;
     }
 
-    // Initialize selected world from runtimeData
+    // Initialize or re-sync selected world from runtimeData
     $effect(() => {
-        if (!selectedWorldId && runtimeData.gameData.worlds.length > 0) {
-            selectedWorldId = runtimeData.gameData.worlds[0].id;
+        const worlds = runtimeData.gameData.worlds;
+        if (worlds.length > 0) {
+            if (!selectedWorldId || !worlds.some((w) => w.id === selectedWorldId)) {
+                selectedWorldId = worlds[0].id;
+            }
         }
     });
 
@@ -370,6 +375,21 @@
 
         <SchedulerPanel />
 
+        <button
+            type="button"
+            class="flex items-center gap-1.5 rounded-md border border-border/60 bg-background px-3 py-1.5 text-xs font-semibold hover:bg-muted duration-150 active:scale-95 cursor-pointer"
+            onclick={() => (showUI = !showUI)}
+            title="Toggle UI visibility in viewport"
+        >
+            {#if showUI}
+                <Eye class="h-3.5 w-3.5 text-green-500" />
+                <span>UI: Visible</span>
+            {:else}
+                <EyeOff class="h-3.5 w-3.5 text-muted-foreground" />
+                <span class="text-muted-foreground">UI: Hidden</span>
+            {/if}
+        </button>
+
         {#if worldData}
             <span class="text-xs text-muted-foreground">
                 {worldData.entities.length} entities
@@ -396,7 +416,25 @@
                     bind:domElement
                 />
 
-                {#if isRunning}
+                <!-- Floating UI visibility toggle in viewport -->
+                <div class="absolute right-3 top-3 z-30 flex items-center gap-2">
+                    <button
+                        type="button"
+                        class="flex items-center gap-1.5 rounded-md border border-border/60 bg-background/85 px-2.5 py-1 text-xs font-medium text-foreground shadow-sm backdrop-blur-md transition-all hover:bg-background active:scale-95 cursor-pointer"
+                        onclick={() => (showUI = !showUI)}
+                        title="Toggle UI visibility"
+                    >
+                        {#if showUI}
+                            <Eye class="h-3.5 w-3.5 text-green-500" />
+                            <span>UI</span>
+                        {:else}
+                            <EyeOff class="h-3.5 w-3.5 text-muted-foreground" />
+                            <span class="text-muted-foreground">UI</span>
+                        {/if}
+                    </button>
+                </div>
+
+                {#if isRunning && showUI}
                     <!-- Screen UI Overlay -->
                     <div class="pointer-events-none absolute inset-0 z-20 overflow-hidden select-none">
                         {#each runtimeEntities as entity (entity.id)}

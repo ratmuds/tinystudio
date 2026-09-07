@@ -70,7 +70,7 @@
     let addEntityModalOpen = $state(false);
     let addComponentModalOpen = $state(false);
     let saved = $state(false);
-    // ─── ECS ↔ Three.js sync ────────────────────────────────────────────
+    //  ECS ↔ Three.js sync 
     // Maps entity ID → Three.js mesh so we can update/remove meshes when ECS data changes.
     const meshByEntityId = new Map<string, THREE.Mesh>();
     // Maps entity ID → camera debug helper (frustum + pick body).
@@ -301,7 +301,7 @@
         selectedFaces = selectedFaces.filter((f) => f.entityId !== entityId);
     }
 
-    // ─── CSG (constructive solid geometry) ───────────────────────────────
+    //  CSG (constructive solid geometry) 
     let csgOperationModalOpen = $state(false);
     let csgBusy = $state(false);
 

@@ -12,6 +12,9 @@ export interface ScriptContext {
     getMouseDelta(): { x: number; y: number };
     getScrollY(): number;
     getInputEvents(): EventEmitter;
+    getGlobalState(): Map<string, any>;
+    getBroadcastEvents(): EventEmitter;
+    getTime(): { time: number; deltaTime: number; frameCount: number };
     dispatchCallback(
         scope: StateScope,
         callbackId: string,

@@ -1,0 +1,387 @@
+{
+  "name": "Lunar Lander",
+  "description": "Retro physics lunar landing simulation. Fire thrusters with Space / W, control RCS with A / D, manage fuel, and touchdown safely on the landing pad!",
+  "components": [],
+  "systems": [],
+  "worlds": [
+    {
+      "id": "world-lander",
+      "name": "Lunar Surface",
+      "entities": [
+        {
+          "id": "moon-ground",
+          "name": "Moon Surface",
+          "baseEntity": "part",
+          "components": [
+            {
+              "id": "c-mg-t",
+              "name": "Transform",
+              "tooltip": "Transform",
+              "data": {
+                "position": { "type": "vec3", "value": { "x": 0, "y": -0.5, "z": 0 } },
+                "rotation": { "type": "vec3", "value": { "x": 0, "y": 0, "z": 0 } },
+                "scale": { "type": "vec3", "value": { "x": 60, "y": 1, "z": 60 } }
+              }
+            },
+            {
+              "id": "c-mg-m",
+              "name": "Mesh",
+              "tooltip": "Mesh",
+              "data": {
+                "geometryType": { "type": "string", "value": "box" },
+                "color": { "type": "color", "value": 1712419 },
+                "size": { "type": "vec3", "value": { "x": 1, "y": 1, "z": 1 } }
+              }
+            },
+            {
+              "id": "c-mg-p",
+              "name": "Physics",
+              "tooltip": "Physics",
+              "data": {
+                "enabled": { "type": "boolean", "value": true },
+                "anchored": { "type": "boolean", "value": true }
+              }
+            }
+          ]
+        },
+        {
+          "id": "landing-pad",
+          "name": "Landing Pad",
+          "baseEntity": "part",
+          "components": [
+            {
+              "id": "c-lp-t",
+              "name": "Transform",
+              "tooltip": "Transform",
+              "data": {
+                "position": { "type": "vec3", "value": { "x": 0, "y": 0.08, "z": 0 } },
+                "rotation": { "type": "vec3", "value": { "x": 0, "y": 0, "z": 0 } },
+                "scale": { "type": "vec3", "value": { "x": 8, "y": 0.2, "z": 8 } }
+              }
+            },
+            {
+              "id": "c-lp-m",
+              "name": "Mesh",
+              "tooltip": "Mesh",
+              "data": {
+                "geometryType": { "type": "string", "value": "cylinder" },
+                "color": { "type": "color", "value": 43988 },
+                "size": { "type": "vec3", "value": { "x": 1, "y": 1, "z": 1 } }
+              }
+            },
+            {
+              "id": "c-lp-p",
+              "name": "Physics",
+              "tooltip": "Physics",
+              "data": {
+                "enabled": { "type": "boolean", "value": true },
+                "anchored": { "type": "boolean", "value": true }
+              }
+            }
+          ]
+        },
+        {
+          "id": "rock-1",
+          "name": "Lunar Rock A",
+          "baseEntity": "part",
+          "components": [
+            {
+              "id": "c-r1-t",
+              "name": "Transform",
+              "tooltip": "Transform",
+              "data": {
+                "position": { "type": "vec3", "value": { "x": 7, "y": 0.8, "z": 4 } },
+                "rotation": { "type": "vec3", "value": { "x": 0.2, "y": 0.6, "z": 0.1 } },
+                "scale": { "type": "vec3", "value": { "x": 3.2, "y": 1.8, "z": 2.8 } }
+              }
+            },
+            {
+              "id": "c-r1-m",
+              "name": "Mesh",
+              "tooltip": "Mesh",
+              "data": {
+                "geometryType": { "type": "string", "value": "box" },
+                "color": { "type": "color", "value": 3159868 },
+                "size": { "type": "vec3", "value": { "x": 1, "y": 1, "z": 1 } }
+              }
+            },
+            {
+              "id": "c-r1-p",
+              "name": "Physics",
+              "tooltip": "Physics",
+              "data": {
+                "enabled": { "type": "boolean", "value": true },
+                "anchored": { "type": "boolean", "value": true }
+              }
+            }
+          ]
+        },
+        {
+          "id": "rock-2",
+          "name": "Lunar Rock B",
+          "baseEntity": "part",
+          "components": [
+            {
+              "id": "c-r2-t",
+              "name": "Transform",
+              "tooltip": "Transform",
+              "data": {
+                "position": { "type": "vec3", "value": { "x": -8, "y": 1.1, "z": -5 } },
+                "rotation": { "type": "vec3", "value": { "x": -0.1, "y": 1.2, "z": 0.3 } },
+                "scale": { "type": "vec3", "value": { "x": 4.0, "y": 2.2, "z": 3.4 } }
+              }
+            },
+            {
+              "id": "c-r2-m",
+              "name": "Mesh",
+              "tooltip": "Mesh",
+              "data": {
+                "geometryType": { "type": "string", "value": "box" },
+                "color": { "type": "color", "value": 2633519 },
+                "size": { "type": "vec3", "value": { "x": 1, "y": 1, "z": 1 } }
+              }
+            },
+            {
+              "id": "c-r2-p",
+              "name": "Physics",
+              "tooltip": "Physics",
+              "data": {
+                "enabled": { "type": "boolean", "value": true },
+                "anchored": { "type": "boolean", "value": true }
+              }
+            }
+          ]
+        },
+        {
+          "id": "lander-module",
+          "name": "Lunar Lander",
+          "baseEntity": "part",
+          "components": [
+            {
+              "id": "c-lm-t",
+              "name": "Transform",
+              "tooltip": "Transform",
+              "data": {
+                "position": { "type": "vec3", "value": { "x": 0, "y": 16.5, "z": 0 } },
+                "rotation": { "type": "vec3", "value": { "x": 0, "y": 0, "z": 0 } },
+                "scale": { "type": "vec3", "value": { "x": 2.2, "y": 1.8, "z": 2.2 } }
+              }
+            },
+            {
+              "id": "c-lm-m",
+              "name": "Mesh",
+              "tooltip": "Mesh",
+              "data": {
+                "geometryType": { "type": "string", "value": "cylinder" },
+                "color": { "type": "color", "value": 15856113 },
+                "size": { "type": "vec3", "value": { "x": 1, "y": 1, "z": 1 } }
+              }
+            },
+            {
+              "id": "c-lm-p",
+              "name": "Physics",
+              "tooltip": "Physics",
+              "data": {
+                "enabled": { "type": "boolean", "value": true },
+                "anchored": { "type": "boolean", "value": false },
+                "mass": { "type": "number", "value": 12 }
+              }
+            },
+            {
+              "id": "c-lm-s",
+              "name": "Script",
+              "tooltip": "Script",
+              "data": {
+                "scriptId": { "type": "string", "value": "script-lander" }
+              }
+            }
+          ]
+        },
+        {
+          "id": "cam-lander",
+          "name": "Lander Camera",
+          "baseEntity": "camera",
+          "components": [
+            {
+              "id": "c-cl-t",
+              "name": "Transform",
+              "tooltip": "Transform",
+              "data": {
+                "position": { "type": "vec3", "value": { "x": 0, "y": 12, "z": 22 } },
+                "rotation": { "type": "vec3", "value": { "x": -0.25, "y": 0, "z": 0 } },
+                "scale": { "type": "vec3", "value": { "x": 1, "y": 1, "z": 1 } }
+              }
+            },
+            {
+              "id": "c-cl-c",
+              "name": "Camera",
+              "tooltip": "Camera",
+              "data": {
+                "active": { "type": "boolean", "value": true },
+                "mode": { "type": "string", "value": "follow" },
+                "fov": { "type": "number", "value": 52 }
+              }
+            }
+          ]
+        },
+        {
+          "id": "hud-title",
+          "name": "HUD_Title",
+          "baseEntity": "ui",
+          "components": [
+            {
+              "id": "c-ht-ui",
+              "name": "UI",
+              "tooltip": "UI",
+              "data": {
+                "type": { "type": "string", "value": "text" },
+                "text": { "type": "string", "value": "🚀 APOLLO LUNAR LANDER" },
+                "x": { "type": "number", "value": 20 },
+                "y": { "type": "number", "value": 20 },
+                "width": { "type": "number", "value": 280 },
+                "height": { "type": "number", "value": 30 },
+                "fontSize": { "type": "number", "value": 13 },
+                "color": { "type": "string", "value": "#38bdf8" },
+                "backgroundColor": { "type": "string", "value": "rgba(15, 23, 42, 0.85)" },
+                "visible": { "type": "boolean", "value": true }
+              }
+            }
+          ]
+        },
+        {
+          "id": "hud-alt",
+          "name": "HUD_Alt",
+          "baseEntity": "ui",
+          "components": [
+            {
+              "id": "c-ha-ui",
+              "name": "UI",
+              "tooltip": "UI",
+              "data": {
+                "type": { "type": "string", "value": "text" },
+                "text": { "type": "string", "value": "📏 ALT: 16.5 m" },
+                "x": { "type": "number", "value": 20 },
+                "y": { "type": "number", "value": 54 },
+                "width": { "type": "number", "value": 135 },
+                "height": { "type": "number", "value": 28 },
+                "fontSize": { "type": "number", "value": 12 },
+                "color": { "type": "string", "value": "#ffffff" },
+                "backgroundColor": { "type": "string", "value": "rgba(30, 41, 59, 0.85)" },
+                "visible": { "type": "boolean", "value": true }
+              }
+            }
+          ]
+        },
+        {
+          "id": "hud-speed",
+          "name": "HUD_Speed",
+          "baseEntity": "ui",
+          "components": [
+            {
+              "id": "c-hs-ui",
+              "name": "UI",
+              "tooltip": "UI",
+              "data": {
+                "type": { "type": "string", "value": "text" },
+                "text": { "type": "string", "value": "⚡ V-SPD: 0.0 m/s" },
+                "x": { "type": "number", "value": 160 },
+                "y": { "type": "number", "value": 54 },
+                "width": { "type": "number", "value": 140 },
+                "height": { "type": "number", "value": 28 },
+                "fontSize": { "type": "number", "value": 12 },
+                "color": { "type": "string", "value": "#22c55e" },
+                "backgroundColor": { "type": "string", "value": "rgba(30, 41, 59, 0.85)" },
+                "visible": { "type": "boolean", "value": true }
+              }
+            }
+          ]
+        },
+        {
+          "id": "hud-fuel",
+          "name": "HUD_Fuel",
+          "baseEntity": "ui",
+          "components": [
+            {
+              "id": "c-hf-ui",
+              "name": "UI",
+              "tooltip": "UI",
+              "data": {
+                "type": { "type": "string", "value": "text" },
+                "text": { "type": "string", "value": "⛽ FUEL: 100%" },
+                "x": { "type": "number", "value": 20 },
+                "y": { "type": "number", "value": 86 },
+                "width": { "type": "number", "value": 280 },
+                "height": { "type": "number", "value": 28 },
+                "fontSize": { "type": "number", "value": 12 },
+                "color": { "type": "string", "value": "#22c55e" },
+                "backgroundColor": { "type": "string", "value": "rgba(30, 41, 59, 0.85)" },
+                "visible": { "type": "boolean", "value": true }
+              }
+            }
+          ]
+        },
+        {
+          "id": "hud-status",
+          "name": "HUD_Status",
+          "baseEntity": "ui",
+          "components": [
+            {
+              "id": "c-hst-ui",
+              "name": "UI",
+              "tooltip": "UI",
+              "data": {
+                "type": { "type": "string", "value": "text" },
+                "text": { "type": "string", "value": "🛰 DESCENT IN PROGRESS..." },
+                "x": { "type": "number", "value": 20 },
+                "y": { "type": "number", "value": 118 },
+                "width": { "type": "number", "value": 280 },
+                "height": { "type": "number", "value": 30 },
+                "fontSize": { "type": "number", "value": 12 },
+                "color": { "type": "string", "value": "#ffffff" },
+                "backgroundColor": { "type": "string", "value": "rgba(30, 58, 138, 0.85)" },
+                "visible": { "type": "boolean", "value": true }
+              }
+            }
+          ]
+        },
+        {
+          "id": "hud-guide",
+          "name": "HUD_Guide",
+          "baseEntity": "ui",
+          "components": [
+            {
+              "id": "c-hg-ui",
+              "name": "UI",
+              "tooltip": "UI",
+              "data": {
+                "type": { "type": "string", "value": "text" },
+                "text": { "type": "string", "value": "🕹 W / SPACE: Main Thruster • A / D: RCS Thrusters • Touch down gently on the Cyan Pad!" },
+                "x": { "type": "number", "value": 20 },
+                "y": { "type": "number", "value": 152 },
+                "width": { "type": "number", "value": 520 },
+                "height": { "type": "number", "value": 28 },
+                "fontSize": { "type": "number", "value": 11 },
+                "color": { "type": "string", "value": "#94a3b8" },
+                "backgroundColor": { "type": "string", "value": "rgba(15, 23, 42, 0.75)" },
+                "visible": { "type": "boolean", "value": true }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "models": [],
+  "scripts": [
+    {
+      "id": "script-lander",
+      "name": "LanderFlightComputer",
+      "stateData": {},
+      "scriptData": [
+        {
+          "code": "-- Lunar Lander Flight Computer\nlocal fuel = 100\nlocal landed = false\nlocal crashed = false\nlocal lastY = (Transform and Transform.position and Transform.position.y) or 16.5\n\nGlobal.fuel = fuel\nGlobal.status = \"IN_FLIGHT\"\n\nwhile true do\n    wait(0.03)\n\n    local dt = Time.dt\n    if not dt or dt <= 0 then dt = 0.03 end\n\n    local currentY = Transform.position.y\n    local vSpeed = (lastY - currentY) / dt\n    lastY = currentY\n\n    local altitude = math.max(0, currentY - 1.0)\n    Global.altitude = altitude\n    Global.vSpeed = vSpeed\n\n    -- Update Telemetry UI\n    UI.setText(\"HUD_Alt\", string.format(\"📏 ALT: %.1f m\", altitude))\n    UI.setText(\"HUD_Speed\", string.format(\"⚡ V-SPD: %.1f m/s\", math.abs(vSpeed)))\n    UI.setText(\"HUD_Fuel\", string.format(\"⛽ FUEL: %d%%\", math.floor(fuel)))\n\n    -- Speed warning coloring\n    if vSpeed > 3.0 then\n        UI.setColor(\"HUD_Speed\", \"#ef4444\")\n    else\n        UI.setColor(\"HUD_Speed\", \"#22c55e\")\n    end\n\n    if not landed and not crashed then\n        -- 1. Main Thruster (W, Space, or Up Arrow)\n        if (Input.isKeyDown(\"Space\") or Input.isKeyDown(\"KeyW\") or Input.isKeyDown(\"ArrowUp\")) and fuel > 0 then\n            fuel = math.max(0, fuel - 0.35)\n            Physics:applyImpulse(0, 0.44, 0)\n        end\n\n        -- 2. Lateral RCS Thrusters (A / D)\n        if (Input.isKeyDown(\"KeyA\") or Input.isKeyDown(\"ArrowLeft\")) and fuel > 0 then\n            fuel = math.max(0, fuel - 0.15)\n            Physics:applyImpulse(-0.16, 0, 0)\n        end\n        if (Input.isKeyDown(\"KeyD\") or Input.isKeyDown(\"ArrowRight\")) and fuel > 0 then\n            fuel = math.max(0, fuel - 0.15)\n            Physics:applyImpulse(0.16, 0, 0)\n        end\n\n        -- Stabilize pitch & roll\n        Transform.rotation.x = 0\n        Transform.rotation.z = 0\n\n        -- 3. Touchdown Check\n        if altitude <= 0.25 then\n            local posX = Transform.position.x\n            local posZ = Transform.position.z\n            local distFromPad = math.sqrt(posX * posX + posZ * posZ)\n\n            if distFromPad <= 4.2 and vSpeed <= 3.2 then\n                landed = true\n                Global.status = \"LANDED\"\n                UI.setText(\"HUD_Status\", \"🎉 TOUCHDOWN! THE EAGLE HAS LANDED!\")\n                UI.setBackgroundColor(\"HUD_Status\", \"rgba(34, 197, 94, 0.95)\")\n                Physics:setVelocity(0, 0, 0)\n            else\n                crashed = true\n                Global.status = \"CRASHED\"\n                if distFromPad > 4.2 then\n                    UI.setText(\"HUD_Status\", \"💥 MISSED THE PAD! CRASHED ON ROCKS!\")\n                else\n                    UI.setText(\"HUD_Status\", \"💥 HARD IMPACT! DESCENT TOO FAST!\")\n                end\n                UI.setBackgroundColor(\"HUD_Status\", \"rgba(239, 68, 68, 0.95)\")\n            end\n        end\n    end\nend\n"
+        }
+      ]
+    }
+  ]
+}

@@ -150,6 +150,21 @@ export class MathModule implements ScriptModule {
             function Vector2:length()
                 return math.sqrt(self.x * self.x + self.y * self.y)
             end
+
+            -- Math extensions
+            function math.clamp(val, minVal, maxVal)
+                if val < minVal then return minVal end
+                if val > maxVal then return maxVal end
+                return val
+            end
+
+            function math.lerp(a, b, t)
+                return a + (b - a) * (t or 0.5)
+            end
+
+            function math.randomRange(minVal, maxVal)
+                return minVal + math.random() * (maxVal - minVal)
+            end
         `);
     }
 }

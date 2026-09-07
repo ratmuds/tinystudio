@@ -25,7 +25,7 @@
     } from "$lib/stores/data.svelte";
     import * as ECS from "$lib/stores/ecs.svelte";
 
-    // ─── Single source of truth ──────────────────────────────────────────
+    //  Single source of truth 
     // ALL game data lives here. Workspaces receive references into this
     // object and modify it directly. Because Svelte 5 $state() is deeply
     // reactive, mutations to nested properties propagate everywhere.
@@ -37,7 +37,7 @@
         runtimeData.gameData = gameData;
     });
 
-    // ─── Tabs ────────────────────────────────────────────────────────────
+    //  Tabs 
     // Each tab references a piece of data by its ID (dataId).
     // When a tab is switched to, we look up the data from gameData.
     let tabs = $state<StudioTab[]>([]);
@@ -81,7 +81,7 @@
             : undefined;
     }
 
-    // ─── Tab management ─────────────────────────────────────────────────
+    //  Tab management 
     function openModelTab(name: string, modelData: ModelData) {
         // Reuse existing tab if this model is already open
         const existing = tabs.find(
@@ -236,7 +236,7 @@
         openTestTab();
     }
 
-    // ─── Projects & Persistence ──────────────────────────────────────────
+    //  Projects & Persistence 
     let projectsModalOpen = $state(true); // Open on first visit
     let hasStarted = $state(false);
 
@@ -276,7 +276,7 @@
         triggerSave();
     }
 
-    // ─── Save ────────────────────────────────────────────────────────────
+    //  Save 
     let saved = $state(true);
     let saving = $state(false);
 
@@ -290,7 +290,7 @@
         }, 900);
     }
 
-    // ─── Menu config ─────────────────────────────────────────────────────
+    //  Menu config 
     const menus: Record<string, MenuItem[]> = {
         File: [
             { label: "Projects…", action: () => (projectsModalOpen = true) },
@@ -342,7 +342,7 @@
 
     let activeWorkspace = $state<WorkspaceKind>("model");
 
-    // ─── Sync activeWorkspace ↔ activeTab ─────────────────────────────────
+    //  Sync activeWorkspace ↔ activeTab 
     // Each effect uses untrack() to read the "other" variable without
     // creating a circular dependency. Without untrack, clicking a tab
     // triggers Effect A → changes activeWorkspace → triggers Effect B

@@ -43,6 +43,15 @@
 
     let demoProjects = $state<DemoProjectInfo[]>([
         {
+            id: "lunar-lander",
+            name: "Lunar Lander",
+            description:
+                "Retro physics space lander. Fire main thrusters with Space / W, control lateral RCS with A / D, manage fuel, and touchdown gently on the pad!",
+            filename: "lunar_lander.json",
+            icon: "sparkles",
+            tags: ["Space", "Physics", "Global State", "Lander"],
+        },
+        {
             id: "platformer-playground",
             name: "Platformer Playground",
             description:
@@ -59,15 +68,6 @@
             filename: "physics_sandbox.json",
             icon: "boxes",
             tags: ["Jolt Physics", "Collisions", "Destruction"],
-        },
-        {
-            id: "ui-clicker",
-            name: "UI & Scripting Demo",
-            description:
-                "Interactive 3D crystal showcase with Screen UI button listeners, live counters, and Luau script loops.",
-            filename: "ui_clicker.json",
-            icon: "sparkles",
-            tags: ["Screen UI", "Luau Scripts", "Events"],
         },
     ]);
 

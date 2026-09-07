@@ -57,6 +57,39 @@ export class EntityModule implements ScriptModule {
             },
         );
 
+        lua.global.set("__entityAddTagJS", (entityId: string, tag: string) => {
+            const entity = ctx.getEntities().find((e) => e.id === entityId);
+            if (!entity) return;
+            if (!entity.tags) entity.tags = [];
+            if (!entity.tags.includes(tag)) entity.tags.push(tag);
+        });
+
+        lua.global.set(
+            "__entityRemoveTagJS",
+            (entityId: string, tag: string) => {
+                const entity = ctx.getEntities().find((e) => e.id === entityId);
+                if (entity && entity.tags) {
+                    entity.tags = entity.tags.filter((t) => t !== tag);
+                }
+            },
+        );
+
+        lua.global.set("__entityHasTagJS", (entityId: string, tag: string) => {
+            const entity = ctx.getEntities().find((e) => e.id === entityId);
+            return entity?.tags ? entity.tags.includes(tag) : false;
+        });
+
+        lua.global.set("__findEntitiesByTagJS", (tag: string) => {
+            const found = ctx
+                .getEntities()
+                .filter((e) => e.tags && e.tags.includes(tag));
+            return found.map((e) => e.id);
+        });
+
+        lua.global.set("__getAllEntityIdsJS", () => {
+            return ctx.getEntities().map((e) => e.id);
+        });
+
         // 2. Define LiveVector3, Component, and Entity metatables in Lua
         lua.doStringSync(`
             -- LiveVector3 Metatable:
@@ -223,7 +256,19 @@ export class EntityModule implements ScriptModule {
                 __entityEmit(self.id, eventName, ...)
             end
 
-            -- Entity global constructors
+            function Entity:addTag(tag)
+                __entityAddTagJS(self.id, tostring(tag))
+            end
+
+            function Entity:removeTag(tag)
+                __entityRemoveTagJS(self.id, tostring(tag))
+            end
+
+            function Entity:hasTag(tag)
+                return __entityHasTagJS(self.id, tostring(tag))
+            end
+
+            -- Entity global constructors and queries
             function getEntityById(id)
                 local raw = __findEntityByIdJS(id)
                 if not raw then return nil end
@@ -244,6 +289,37 @@ export class EntityModule implements ScriptModule {
                     _components = raw.components,
                     events = raw.events
                 }, Entity)
+            end
+
+            function getEntitiesByTag(tag)
+                local ids = __findEntitiesByTagJS(tostring(tag))
+                local list = {}
+                if ids then
+                    local len = ids.length or #ids
+                    for i = 1, len do
+                        local wrapped = getEntityById(ids[i])
+                        if wrapped then table.insert(list, wrapped) end
+                    end
+                end
+                return list
+            end
+
+            function getEntityByTag(tag)
+                local list = getEntitiesByTag(tag)
+                return list[1]
+            end
+
+            function getAllEntities()
+                local ids = __getAllEntityIdsJS()
+                local list = {}
+                if ids then
+                    local len = ids.length or #ids
+                    for i = 1, len do
+                        local wrapped = getEntityById(ids[i])
+                        if wrapped then table.insert(list, wrapped) end
+                    end
+                end
+                return list
             end
         `);
     }

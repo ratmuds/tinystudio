@@ -12,6 +12,8 @@ import {
     InputModule,
     UIModule,
     CameraModule,
+    StateModule,
+    TimeModule,
     type ScriptContext,
     type ScriptModule,
 } from "./scripting";
@@ -52,6 +54,13 @@ export class ScriptingSystem extends System {
     private onWheel: ((e: WheelEvent) => void) | null = null;
     private scopes = new Map<string, { lua: LuaEngine; scope: StateScope }>();
 
+    // Shared global state, broadcast events, and time tracking
+    private globalState = new Map<string, any>();
+    private broadcastEvents = new EventEmitter();
+    private elapsedTime = 0;
+    private lastDeltaTime = 0;
+    private frameCount = 0;
+
     private modules: ScriptModule[] = [
         new MathModule(),
         new CoreModule(),
@@ -59,6 +68,8 @@ export class ScriptingSystem extends System {
         new InputModule(),
         new UIModule(),
         new CameraModule(),
+        new StateModule(),
+        new TimeModule(),
     ];
 
     constructor(scene: THREE.Scene, gameData: GameData) {
@@ -157,6 +168,13 @@ export class ScriptingSystem extends System {
             getMouseDelta: () => this.mouseDelta,
             getScrollY: () => this.scrollY,
             getInputEvents: () => this.inputManagerEvents,
+            getGlobalState: () => this.globalState,
+            getBroadcastEvents: () => this.broadcastEvents,
+            getTime: () => ({
+                time: this.elapsedTime,
+                deltaTime: this.lastDeltaTime,
+                frameCount: this.frameCount,
+            }),
             dispatchCallback: (scope, callbackId, args, name) => {
                 this.dispatchCallback(scope, callbackId, args, name);
             },
@@ -278,8 +296,12 @@ export class ScriptingSystem extends System {
         entity?.events.emit(eventName, ...args);
     }
 
-    update(_deltaTime: number, _entities: Entity[]): void {
+    update(deltaTime: number, _entities: Entity[]): void {
         if (!this.running) return;
+
+        this.elapsedTime += deltaTime;
+        this.lastDeltaTime = deltaTime;
+        this.frameCount++;
 
         // Step every active script scope once per runtime frame
         for (const [entityId, { lua, scope }] of [...this.scopes]) {
@@ -332,6 +354,11 @@ export class ScriptingSystem extends System {
         }
         this.scopes.clear();
         this.entities = [];
+        this.globalState.clear();
+        this.broadcastEvents.clear();
+        this.elapsedTime = 0;
+        this.lastDeltaTime = 0;
+        this.frameCount = 0;
         if (this.onKeyDown)
             window.removeEventListener("keydown", this.onKeyDown);
         if (this.onKeyUp) window.removeEventListener("keyup", this.onKeyUp);

@@ -17,6 +17,7 @@ class Entity {
 
     components: Component[] = $state([]);
     children: Entity[] = $state([]);
+    tags: string[] = $state([]);
     events: EventEmitter = new EventEmitter();
 }
 
@@ -248,7 +249,7 @@ function clearDirtyFlags(entities: Entity[]): void {
     }
 }
 
-// ─── Entity Factories ───────────────────────────────────────────────────
+//  Entity Factories 
 // Each factory returns an Entity pre-populated with the default components
 // for that baseEntity type.
 
