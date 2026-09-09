@@ -54,10 +54,13 @@ export async function generateObjectPreview(
             };
 
             const meshComp = entity.components.find((c) => c.name === "Mesh");
-            let materialColor = 0x3b82f6;
+            let materialColor: number | string = 0x3b82f6;
             let geometryType = "box";
             if (meshComp) {
-                if (typeof meshComp.data.color?.value === "number") {
+                if (
+                    typeof meshComp.data.color?.value === "number" ||
+                    typeof meshComp.data.color?.value === "string"
+                ) {
                     materialColor = meshComp.data.color.value;
                 }
                 if (typeof meshComp.data.geometry?.value === "string") {

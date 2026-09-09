@@ -92,7 +92,7 @@
 
         const geomType = meshComp.data.geometryType.value as string;
         const size = (meshComp.data.size?.value ?? { x: 1, y: 1, z: 1 }) as Vec3;
-        const color = meshComp.data.color.value as number;
+        const color = meshComp.data.color.value as number | string;
         const customGeometry = meshComp.data.customGeometry?.value ?? null;
 
         const geometry = createGeometry(geomType, size, customGeometry);
@@ -165,7 +165,7 @@
                 y: number;
                 z: number;
             };
-            const color = meshComp.data.color.value as number;
+            const color = meshComp.data.color.value as number | string;
             const customGeometry = meshComp.data.customGeometry?.value ?? null;
             const customCount = customGeometry?.positions?.length ?? 0;
 
@@ -183,7 +183,7 @@
 
             const material = mesh.material as THREE.MeshStandardMaterial;
             if (material?.color) {
-                material.color.setHex(color);
+                material.color.set(color);
             }
         }
     }
@@ -208,7 +208,7 @@
         // Randomize color so it's easy to see them
         const mesh = entity.components.find((c) => c.name === "Mesh")!;
         const color = new THREE.Color().setHSL(Math.random(), 0.6, 0.5);
-        mesh.data.color.value = color.getHex();
+        mesh.data.color.value = `#${color.getHexString()}`;
 
         // Register in ECS data
         modelData.entities.push(entity);
@@ -268,8 +268,13 @@
         );
         if (!entity) return;
 
-        if (componentType === "Script") {
-            const component = ECS.createScriptComponent();
+        if (entity.components.some((c) => c.name === componentType)) {
+            addComponentModalOpen = false;
+            return;
+        }
+
+        const component = ECS.createComponent(componentType);
+        if (component) {
             entity.components.push(component);
         }
         addComponentModalOpen = false;
@@ -647,9 +652,24 @@
     <Command.List class="mt-3">
         <Command.Empty>No results found.</Command.Empty>
         <Command.Group heading="Components">
-            <Command.Item onSelect={() => handleAddComponent("Script")}
-                >Script</Command.Item
-            >
+            <Command.Item onSelect={() => handleAddComponent("Script")}>
+                Script
+            </Command.Item>
+            <Command.Item onSelect={() => handleAddComponent("Physics")}>
+                Physics
+            </Command.Item>
+            <Command.Item onSelect={() => handleAddComponent("PlayerController")}>
+                PlayerController
+            </Command.Item>
+            <Command.Item onSelect={() => handleAddComponent("Camera")}>
+                Camera
+            </Command.Item>
+            <Command.Item onSelect={() => handleAddComponent("UI")}>
+                UI
+            </Command.Item>
+            <Command.Item onSelect={() => handleAddComponent("Constraint")}>
+                Constraint
+            </Command.Item>
         </Command.Group>
     </Command.List>
 </Command.Dialog>

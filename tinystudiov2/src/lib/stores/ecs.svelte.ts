@@ -19,6 +19,17 @@ class Entity {
     children: Entity[] = $state([]);
     tags: string[] = $state([]);
     events: EventEmitter = new EventEmitter();
+
+    toJSON() {
+        return {
+            id: this.id,
+            name: this.name,
+            baseEntity: this.baseEntity,
+            tags: this.tags,
+            components: this.components,
+            children: this.children,
+        };
+    }
 }
 
 type ComponentDataEntry = {
@@ -47,6 +58,15 @@ class Component {
     tooltip?: string = $state();
 
     data: Record<string, ComponentDataEntry> = $state({});
+
+    toJSON() {
+        return {
+            id: this.id,
+            name: this.name,
+            tooltip: this.tooltip,
+            data: this.data,
+        };
+    }
 }
 
 class System {
@@ -398,6 +418,35 @@ function createPlayerEntity(name: string = "Player"): Entity {
     return e;
 }
 
+function createComponent(name: string, extra?: any): Component {
+    switch (name) {
+        case "Transform":
+            return createTransformComponent();
+        case "Mesh":
+            return createMeshComponent();
+        case "Physics":
+            return createPhysicsComponent();
+        case "ModelRef":
+            return createModelRefComponent(extra || "");
+        case "Script":
+            return createScriptComponent(extra || "");
+        case "Constraint":
+            return createConstraintComponent();
+        case "Camera":
+            return createCameraComponent();
+        case "UI":
+            return createUIComponent(extra || "button");
+        case "PlayerController":
+            return createPlayerControllerComponent();
+        default: {
+            const c = new Component();
+            c.id = crypto.randomUUID();
+            c.name = name;
+            return c;
+        }
+    }
+}
+
 export {
     type BaseEntityType,
     Entity,
@@ -407,6 +456,7 @@ export {
     // utilities
     clearDirtyFlags,
     // factories
+    createComponent,
     createTransformComponent,
     createMeshComponent,
     createPhysicsComponent,

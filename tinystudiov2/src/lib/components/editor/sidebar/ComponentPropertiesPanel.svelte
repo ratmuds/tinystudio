@@ -28,6 +28,32 @@
         showAddButton?: boolean;
         onAddComponent?: () => void;
     } = $props();
+    function toHexColor(val: any): string {
+        if (typeof val === "number") {
+            return "#" + val.toString(16).padStart(6, "0");
+        }
+        if (typeof val === "string") {
+            if (val.startsWith("#")) {
+                return val.length === 7 ? val : val.slice(0, 7);
+            }
+            const num = parseInt(val, 16);
+            if (!isNaN(num)) {
+                return "#" + num.toString(16).padStart(6, "0");
+            }
+        }
+        return "#44aa44";
+    }
+
+    function updateColor(key: string, entry: ComponentEntry, data: any, newColor: string) {
+        entry.value = newColor;
+        if (Array.isArray(data)) {
+            for (const comp of data) {
+                if (comp?.data?.[key]) {
+                    comp.data[key].value = newColor;
+                }
+            }
+        }
+    }
 </script>
 
 {#each components as { component, data }}
@@ -40,7 +66,7 @@
 
     {#each Object.entries(component.data) as [key, entry]}
         <div class="flex flex-col gap-3">
-            {#if entry.type === "vector3"}
+            {#if entry.type === "vector3" || entry.type === "vec3"}
                 <div>
                     <p class="mb-1 text-sm">{key}</p>
                     {#if key === "rotation"}
@@ -73,13 +99,29 @@
                     <Switch bind:checked={entry.value} />
                 </div>
             {:else if entry.type === "color"}
+                {@const hexColor = toHexColor(entry.value)}
                 <div>
                     <p class="mb-1 text-sm">{key}</p>
-                    <input
-                        type="color"
-                        bind:value={entry.value}
-                        class="my-2 h-10 w-full rounded-md border-2 border-border/60 bg-background duration-150 outline-none focus:border-green-700"
-                    />
+                    <div class="my-2 flex items-center gap-2">
+                        <input
+                            type="color"
+                            value={hexColor}
+                            oninput={(e) => updateColor(key, entry, data, e.currentTarget.value)}
+                            class="h-9 w-12 cursor-pointer rounded-md border-2 border-border/60 bg-background p-0.5 duration-150 outline-none focus:border-green-700"
+                        />
+                        <input
+                            type="text"
+                            value={hexColor}
+                            onchange={(e) => {
+                                let val = e.currentTarget.value.trim();
+                                if (!val.startsWith("#")) val = "#" + val;
+                                if (/^#[0-9a-fA-F]{6}$/.test(val)) {
+                                    updateColor(key, entry, data, val);
+                                }
+                            }}
+                            class="h-9 flex-1 rounded-md border-2 border-border/60 bg-background px-3 py-1 font-mono text-xs duration-150 outline-none focus:border-green-700 uppercase"
+                        />
+                    </div>
                 </div>
             {:else if entry.type === "script"}
                 <div>

@@ -119,7 +119,7 @@
 
                 const geomType = partMeshComp.data.geometryType.value as string;
                 const size = partMeshComp.data.size.value as Vec3;
-                const color = partMeshComp.data.color.value as number;
+                const color = partMeshComp.data.color.value as number | string;
                 const customGeometry =
                     partMeshComp.data.customGeometry?.value ?? null;
 
@@ -144,6 +144,7 @@
                 // also reads `partId` to recognise parts in-game).
                 mesh.userData.partId = entity.id;
                 mesh.userData.entityId = entity.id;
+                mesh.userData.partEntityId = partEntity.id;
 
                 group.add(mesh);
             }
@@ -151,7 +152,7 @@
             // A raw part placed directly in the world
             const geomType = meshComp.data.geometryType.value as string;
             const size = meshComp.data.size.value as Vec3;
-            const color = meshComp.data.color.value as number;
+            const color = meshComp.data.color.value as number | string;
             const customGeometry = meshComp.data.customGeometry?.value ?? null;
 
             const geometry = createGeometry(geomType, size, customGeometry);
@@ -249,7 +250,30 @@
 
             const material = mesh.material as THREE.MeshStandardMaterial;
             if (material?.color) {
-                material.color.setHex(meshComp.data.color.value as number);
+                material.color.set(meshComp.data.color.value);
+            }
+        }
+
+        // Keep model part meshes in sync with model data
+        const modelRefComp = entity.components.find((c) => c.name === "ModelRef");
+        if (modelRefComp) {
+            const modelId = modelRefComp.data.modelId.value as string;
+            const model = gameData.models.find((m) => m.id === modelId);
+            if (model) {
+                for (const child of group.children) {
+                    if (child instanceof THREE.Mesh && child.userData.partEntityId) {
+                        const partEntity = model.entities.find(
+                            (e) => e.id === child.userData.partEntityId,
+                        );
+                        const partMeshComp = partEntity?.components.find(
+                            (c) => c.name === "Mesh",
+                        );
+                        const mat = child.material as THREE.MeshStandardMaterial;
+                        if (partMeshComp && mat?.color) {
+                            mat.color.set(partMeshComp.data.color.value);
+                        }
+                    }
+                }
             }
         }
     }
@@ -291,8 +315,13 @@
         );
         if (!entity) return;
 
-        if (componentType === "Script") {
-            const component = ECS.createScriptComponent();
+        if (entity.components.some((c) => c.name === componentType)) {
+            addComponentModalOpen = false;
+            return;
+        }
+
+        const component = ECS.createComponent(componentType);
+        if (component) {
             entity.components.push(component);
         }
         addComponentModalOpen = false;
@@ -344,7 +373,7 @@
         };
         const mesh = entity.components.find((c) => c.name === "Mesh")!;
         const color = new THREE.Color().setHSL(Math.random(), 0.6, 0.5);
-        mesh.data.color.value = color.getHex();
+        mesh.data.color.value = `#${color.getHexString()}`;
 
         worldData.entities.push(entity);
         selectedPartIds = [entity.id];
@@ -1153,6 +1182,21 @@
         <Command.Group heading="Components">
             <Command.Item onSelect={() => handleAddComponent("Script")}>
                 Script
+            </Command.Item>
+            <Command.Item onSelect={() => handleAddComponent("Physics")}>
+                Physics
+            </Command.Item>
+            <Command.Item onSelect={() => handleAddComponent("PlayerController")}>
+                PlayerController
+            </Command.Item>
+            <Command.Item onSelect={() => handleAddComponent("Camera")}>
+                Camera
+            </Command.Item>
+            <Command.Item onSelect={() => handleAddComponent("UI")}>
+                UI
+            </Command.Item>
+            <Command.Item onSelect={() => handleAddComponent("Constraint")}>
+                Constraint
             </Command.Item>
         </Command.Group>
     </Command.List>

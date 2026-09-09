@@ -43,13 +43,13 @@ export function createGeometry(
 /**
  * Creates a Three.js Mesh with standard material and shadow settings.
  * @param geometry - The geometry for the mesh
- * @param color - The color for the material
+ * @param color - The color for the material (hex number or string)
  * @param entityId - Optional entity ID to tag the mesh with
  * @returns A configured Three.js Mesh
  */
 export function createMesh(
     geometry: THREE.BufferGeometry,
-    color: number,
+    color: number | string,
     entityId?: string,
 ): THREE.Mesh {
     const mesh = new THREE.Mesh(

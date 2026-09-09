@@ -87,7 +87,7 @@ export class MeshSystem extends System {
 
         const geomType = meshComp.data.geometryType.value as string;
         const size = meshComp.data.size.value as Vec3;
-        const color = meshComp.data.color.value as number;
+        const color = meshComp.data.color.value as number | string;
         const customGeometry = meshComp.data.customGeometry?.value ?? null;
 
         const geometry = createGeometry(geomType, size, customGeometry);

@@ -10,6 +10,18 @@ export class GameData {
     worlds: WorldData[] = $state([]); // All worlds in this game
     models: ModelData[] = $state([]); // All models in the game (reusable across worlds)
     scripts: ScriptData[] = $state([]); // All scripts in the game (reusable across entities)
+
+    toJSON() {
+        return {
+            name: this.name,
+            description: this.description,
+            components: this.components,
+            systems: this.systems,
+            worlds: this.worlds,
+            models: this.models,
+            scripts: this.scripts,
+        };
+    }
 }
 
 export class RuntimeData {
@@ -36,6 +48,14 @@ export class WorldData {
     name: string = $state("Untitled World");
 
     entities: ECS.Entity[] = $state([]);
+
+    toJSON() {
+        return {
+            id: this.id,
+            name: this.name,
+            entities: this.entities,
+        };
+    }
 }
 
 export class WorldWorkspaceData extends WorkspaceData {
@@ -62,6 +82,15 @@ export class ModelData {
     constructor(name: string, id?: string) {
         this.id = id || crypto.randomUUID();
         this.name = name;
+    }
+
+    toJSON() {
+        return {
+            id: this.id,
+            name: this.name,
+            thumbnail: this.thumbnail,
+            entities: this.entities,
+        };
     }
 }
 
@@ -115,6 +144,15 @@ end`,
     constructor(name: string, id?: string) {
         this.id = id || crypto.randomUUID();
         this.name = name;
+    }
+
+    toJSON() {
+        return {
+            id: this.id,
+            name: this.name,
+            stateData: this.stateData,
+            scriptData: this.scriptData,
+        };
     }
 }
 
