@@ -1097,6 +1097,12 @@
                                 .models.length} models available
                         </span>
                     </div>
+
+                    <div class="flex gap-2">
+                        <CornerDownRight class="h-3 w-3 text-green-500" />
+                        <span class="text-zinc-300">This console doesn't actually do anything :(</span>
+                        <span class="text-zinc-300">View the browser console to see logs.</span>
+                    </div>
                 </div>
                 <div
                     class="flex items-center gap-2 border-t border-border/60 bg-muted/30 px-4 py-2"

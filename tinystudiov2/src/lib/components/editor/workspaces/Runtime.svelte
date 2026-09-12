@@ -102,7 +102,7 @@
             tags: entity.tags ? [...entity.tags] : [],
             children: [],
             events: new EventEmitter(),
-        } as Entity;
+        } as unknown as Entity;
     }
 
     // Flatten a world into a flat list of world-space runtime parts. ModelRef
@@ -397,7 +397,6 @@
             <span class="text-xs text-muted-foreground">
                 {runtimeData.systems.length} systems
             </span>
-            {isRunning ? "Runtime is running." : "Runtime is stopped."}
         {/if}
     </div>
 
@@ -415,24 +414,6 @@
                     orbitControls={false}
                     bind:domElement
                 />
-
-                <!-- Floating UI visibility toggle in viewport -->
-                <div class="absolute right-3 top-3 z-30 flex items-center gap-2">
-                    <button
-                        type="button"
-                        class="flex items-center gap-1.5 rounded-md border border-border/60 bg-background/85 px-2.5 py-1 text-xs font-medium text-foreground shadow-sm backdrop-blur-md transition-all hover:bg-background active:scale-95 cursor-pointer"
-                        onclick={() => (showUI = !showUI)}
-                        title="Toggle UI visibility"
-                    >
-                        {#if showUI}
-                            <Eye class="h-3.5 w-3.5 text-green-500" />
-                            <span>UI</span>
-                        {:else}
-                            <EyeOff class="h-3.5 w-3.5 text-muted-foreground" />
-                            <span class="text-muted-foreground">UI</span>
-                        {/if}
-                    </button>
-                </div>
 
                 {#if isRunning && showUI}
                     <!-- Screen UI Overlay -->
@@ -452,7 +433,7 @@
                                 {#if type === "button"}
                                     <button
                                         type="button"
-                                        class="pointer-events-auto absolute flex items-center justify-center rounded-lg font-semibold shadow-md transition-all duration-100 hover:brightness-110 active:scale-95 cursor-pointer"
+                                        class="pointer-events-auto absolute flex items-center justify-center rounded-lg font-semibold shadow-md px-3 text-center transition-all duration-100 hover:brightness-110 active:scale-95 cursor-pointer"
                                         style="left: {x}px; top: {y}px; width: {w}px; height: {h}px; color: {color}; background-color: {bg}; font-size: {size}px;"
                                         onclick={() => {
                                             entity.events.emit("UI.click", entity);
@@ -463,8 +444,13 @@
                                     </button>
                                 {:else}
                                     <div
-                                        class="pointer-events-none absolute flex items-center font-medium"
+                                        class="pointer-events-auto absolute flex items-center justify-center rounded-lg font-semibold shadow-md px-3 text-center transition-all"
                                         style="left: {x}px; top: {y}px; width: {w}px; height: {h}px; color: {color}; background-color: {bg}; font-size: {size}px;"
+                                        onclick={() => {
+                                            entity.events.emit("UI.click", entity);
+                                            entity.events.emit("click", entity);
+                                        }}
+                                        role="presentation"
                                     >
                                         {text}
                                     </div>

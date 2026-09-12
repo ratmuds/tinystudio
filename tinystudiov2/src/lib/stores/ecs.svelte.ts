@@ -269,6 +269,51 @@ function clearDirtyFlags(entities: Entity[]): void {
     }
 }
 
+function cloneComponent(source: Component): Component {
+    const c = new Component();
+    c.id = crypto.randomUUID();
+    c.name = source.name;
+    c.tooltip = source.tooltip;
+    const rawData = $state.snapshot(source.data);
+    c.data = structuredClone(rawData);
+    return c;
+}
+
+function cloneEntity(
+    source: Entity,
+    options?: { name?: string; nameSuffix?: string },
+): Entity {
+    const e = new Entity();
+    e.id = crypto.randomUUID();
+
+    if (options?.name) {
+        e.name = options.name;
+    } else {
+        const suffix = options?.nameSuffix ?? " (Copy)";
+        const match = source.name.match(/^(.*?)(?: \(Copy(?: (\d+))?\))?$/);
+        if (match && suffix === " (Copy)") {
+            const base = match[1];
+            const num = match[2]
+                ? parseInt(match[2], 10) + 1
+                : match[0].includes("(Copy)")
+                  ? 2
+                  : undefined;
+            e.name = num ? `${base} (Copy ${num})` : `${base} (Copy)`;
+        } else {
+            e.name = `${source.name}${suffix}`;
+        }
+    }
+
+    e.baseEntity = source.baseEntity;
+    e.tags = source.tags ? [...source.tags] : [];
+    e.events = new EventEmitter();
+    e.components = (source.components || []).map(cloneComponent);
+    e.children = (source.children || []).map((child) =>
+        cloneEntity(child, { nameSuffix: "" }),
+    );
+    return e;
+}
+
 //  Entity Factories 
 // Each factory returns an Entity pre-populated with the default components
 // for that baseEntity type.
@@ -455,6 +500,8 @@ export {
     type ComponentDataEntry,
     // utilities
     clearDirtyFlags,
+    cloneEntity,
+    cloneComponent,
     // factories
     createComponent,
     createTransformComponent,

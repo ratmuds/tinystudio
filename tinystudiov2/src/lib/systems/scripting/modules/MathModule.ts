@@ -83,8 +83,11 @@ export class MathModule implements ScriptModule {
                 )
             end
 
+            -- Polyfill math.atan2 for Lua 5.4 compatibility
+            math.atan2 = math.atan2 or math.atan
+
             function Vector3:getYaw()
-                return math.atan2(self.x, self.z)
+                return math.atan(self.x, self.z)
             end
 
             function Vector3:setYaw(yaw)
@@ -95,7 +98,7 @@ export class MathModule implements ScriptModule {
             end
 
             function Vector3:getPitch()
-                return math.atan2(self.y, math.sqrt(self.x * self.x + self.z * self.z))
+                return math.atan(self.y, math.sqrt(self.x * self.x + self.z * self.z))
             end
 
             function Vector3:setPitch(pitch)
@@ -107,6 +110,26 @@ export class MathModule implements ScriptModule {
                 self.x = math.sin(yaw) * lenXZ
                 self.z = math.cos(yaw) * lenXZ
                 return self
+            end
+
+            function Vector3:getLookVector()
+                local pitch = self.x
+                local yaw = self.y
+                local cp = math.cos(pitch)
+                return Vector3.new(math.sin(yaw) * cp, math.sin(pitch), math.cos(yaw) * cp)
+            end
+
+            function Vector3:getRightVector()
+                local yaw = self.y
+                return Vector3.new(math.cos(yaw), 0, -math.sin(yaw))
+            end
+
+            function Vector3:getUpVector()
+                local pitch = self.x
+                local yaw = self.y
+                local sp = math.sin(pitch)
+                local cp = math.cos(pitch)
+                return Vector3.new(-math.sin(yaw) * sp, cp, -math.cos(yaw) * sp)
             end
 
             Vector3.zero = Vector3.new(0, 0, 0)

@@ -146,7 +146,7 @@ function restoreComponentEntry(
             type: finalType,
             defaultValue: defaultValue !== undefined ? defaultValue : finalValue,
             value: finalValue,
-            tooltip: tooltip || existing?.tooltip || "",
+            tooltip: tooltip || "",
             dirty: true,
         };
     }

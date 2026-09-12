@@ -95,10 +95,6 @@ function objectToManifold(object: THREE.Object3D): any {
  *
  * - `union` folds all meshes together with a boolean union.
  * - `subtract` subtracts every mesh after the first from the first mesh.
- *
- * Each mesh's world transform is baked into the result. Returns a serialized
- * BufferGeometry (positions + index) and the color of the first input mesh,
- * ready to be stored on a new entity's Mesh component.
  */
 export async function performCSG(
     operation: CSGOperation,

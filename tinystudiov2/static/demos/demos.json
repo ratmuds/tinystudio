@@ -2,10 +2,10 @@
   {
     "id": "lunar-lander",
     "name": "Lunar Lander",
-    "description": "Retro physics space lander. Fire main thrusters with Space / W, control lateral RCS with A / D, manage fuel, and touchdown gently on the pad!",
+    "description": "Land on the planet. W/S to move, Space to boost",
     "filename": "lunar_lander.json",
-    "icon": "sparkles",
-    "tags": ["Space", "Physics", "Global State", "Lander"]
+    "icon": "rocket",
+    "tags": ["Scripting", "Physics", "Models"]
   },
   {
     "id": "platformer-playground",
@@ -13,14 +13,14 @@
     "description": "Third-person character obstacle course with jumping platforms, spinning hazards, and follow camera.",
     "filename": "platformer_playground.json",
     "icon": "gamepad",
-    "tags": ["Player", "Platforms", "Camera Follow"]
+    "tags": ["Player", "Platforms", "Physics"]
   },
   {
     "id": "physics-sandbox",
     "name": "Physics Sandbox",
-    "description": "Interactive rigid-body physics arena with tumble block towers, dominoes, and shockwaves.",
+    "description": "Interactive physics sandbox",
     "filename": "physics_sandbox.json",
     "icon": "boxes",
-    "tags": ["Jolt Physics", "Collisions", "Destruction"]
+    "tags": ["Physics", "Collisions", "Scripting"]
   }
 ]

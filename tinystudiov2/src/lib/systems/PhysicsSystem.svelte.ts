@@ -417,8 +417,16 @@ export class PhysicsSystem extends System {
 
             if (!posDirty && !rotDirty) continue;
 
-            // Activate the body so Jolt accepts the teleport
-            this.bodyInterface.ActivateBody(bodyID);
+            const isStatic =
+                this.bodyInterface.GetMotionType(bodyID) ===
+                this.jolt.EMotionType_Static;
+            const activation = isStatic
+                ? this.jolt.EActivation_DontActivate
+                : this.jolt.EActivation_Activate;
+
+            if (!isStatic) {
+                this.bodyInterface.ActivateBody(bodyID);
+            }
 
             if (posDirty) {
                 const pos = transformComp.data.position.value as {
@@ -426,12 +434,10 @@ export class PhysicsSystem extends System {
                     y: number;
                     z: number;
                 };
-                this.bodyInterface.SetPosition(
-                    bodyID,
-                    new this.jolt.RVec3(pos.x, pos.y, pos.z),
-                    this.jolt.EActivation_Activate,
-                );
-                transformComp.data.position.dirty = false;
+                const rPos = new this.jolt.RVec3(pos.x, pos.y, pos.z);
+                this.bodyInterface.SetPosition(bodyID, rPos, activation);
+                this.jolt.destroy(rPos);
+                // Keep dirty flag so MeshSystem updates the Three.js mesh this frame
             }
 
             if (rotDirty) {
@@ -443,22 +449,31 @@ export class PhysicsSystem extends System {
                 const quat = new THREE.Quaternion().setFromEuler(
                     new THREE.Euler(rot.x, rot.y, rot.z),
                 );
-                this.bodyInterface.SetRotation(
-                    bodyID,
-                    new this.jolt.Quat(quat.x, quat.y, quat.z, quat.w),
-                    this.jolt.EActivation_Activate,
+                const rRot = new this.jolt.Quat(
+                    quat.x,
+                    quat.y,
+                    quat.z,
+                    quat.w,
                 );
-                transformComp.data.rotation.dirty = false;
+                this.bodyInterface.SetRotation(bodyID, rRot, activation);
+                this.jolt.destroy(rRot);
+                // Keep dirty flag so MeshSystem updates the Three.js mesh this frame
             }
         }
 
         // Step the simulation
         this.joltInterface.Step(1.0 / 60.0, 1);
 
-        // After stepping: read back transforms FROM physics bodies
+        // After stepping: read back transforms FROM dynamic physics bodies only.
+        // Static/anchored bodies do not move in physics and should not overwrite script/teleport values.
         for (const entity of entities) {
             const bodyID = this.bodyByEntityId.get(entity.id);
             if (!bodyID) continue;
+
+            const isStatic =
+                this.bodyInterface.GetMotionType(bodyID) ===
+                this.jolt.EMotionType_Static;
+            if (isStatic) continue;
 
             const transformComp = entity.components.find(
                 (c) => c.name === "Transform",
@@ -559,11 +574,29 @@ export class PhysicsSystem extends System {
             // entity's scale so the collider matches the rendered mesh.
             const n = custom.positions.length;
             const verts = new Float32Array(n);
+            let minX = Infinity,
+                minY = Infinity,
+                minZ = Infinity;
+            let maxX = -Infinity,
+                maxY = -Infinity,
+                maxZ = -Infinity;
             for (let i = 0; i < n; i += 3) {
-                verts[i] = custom.positions[i] * scale.x;
-                verts[i + 1] = custom.positions[i + 1] * scale.y;
-                verts[i + 2] = custom.positions[i + 2] * scale.z;
+                const vx = custom.positions[i] * scale.x;
+                const vy = custom.positions[i + 1] * scale.y;
+                const vz = custom.positions[i + 2] * scale.z;
+                verts[i] = vx;
+                verts[i + 1] = vy;
+                verts[i + 2] = vz;
+                if (vx < minX) minX = vx;
+                if (vx > maxX) maxX = vx;
+                if (vy < minY) minY = vy;
+                if (vy > maxY) maxY = vy;
+                if (vz < minZ) minZ = vz;
+                if (vz > maxZ) maxZ = vz;
             }
+            const hx = Math.max(0.05, (maxX - minX) / 2);
+            const hy = Math.max(0.05, (maxY - minY) / 2);
+            const hz = Math.max(0.05, (maxZ - minZ) / 2);
             const idx = custom.index as number[] | null | undefined;
 
             try {
@@ -592,44 +625,54 @@ export class PhysicsSystem extends System {
                     }
                     const settings = new this.jolt.MeshShapeSettings(vl, il);
                     const result = settings.Create();
-                    if (!result.IsValid()) {
-                        console.warn(
-                            "MeshShape creation failed:",
-                            result.GetError(),
-                        );
-                        return null;
+                    if (result.IsValid()) {
+                        return result.Get();
                     }
-                    return result.Get();
-                }
-
-                // Convex hull approximation for dynamic bodies.
-                const pts = new this.jolt.ArrayVec3();
-                for (let i = 0; i < n; i += 3) {
-                    pts.push_back(
-                        new this.jolt.Vec3(
-                            verts[i],
-                            verts[i + 1],
-                            verts[i + 2],
-                        ),
-                    );
-                }
-                const settings = new this.jolt.ConvexHullShapeSettings(pts, 0.1);
-                const result = settings.Create();
-                if (!result.IsValid()) {
                     console.warn(
-                        "ConvexHullShape creation failed:",
+                        "MeshShape creation failed, falling back to bounding box:",
                         result.GetError(),
                     );
-                    return null;
+                } else {
+                    // Convex hull approximation for dynamic bodies.
+                    // Subsample points if vertex count is high to avoid Jolt convex hull overflow
+                    const pts = new this.jolt.ArrayVec3();
+                    const totalPoints = n / 3;
+                    const step = Math.max(1, Math.ceil(totalPoints / 128));
+                    for (let i = 0; i < n; i += 3 * step) {
+                        pts.push_back(
+                            new this.jolt.Vec3(
+                                verts[i],
+                                verts[i + 1],
+                                verts[i + 2],
+                            ),
+                        );
+                    }
+                    const settings = new this.jolt.ConvexHullShapeSettings(
+                        pts,
+                        0.05,
+                    );
+                    const result = settings.Create();
+                    this.jolt.destroy(pts);
+                    if (result.IsValid()) {
+                        return result.Get();
+                    }
+                    console.warn(
+                        "ConvexHullShape creation failed, falling back to bounding box:",
+                        result.GetError(),
+                    );
                 }
-                return result.Get();
             } catch (e) {
                 console.warn(
-                    "Failed to build collider from custom geometry:",
+                    "Failed to build collider from custom geometry, falling back to bounding box:",
                     e,
                 );
-                // Fall through to the box fallback on error.
             }
+
+            // Fallback for custom geometry: box matching the custom mesh bounding box
+            const halfBox = new this.jolt.Vec3(hx, hy, hz);
+            const box = new this.jolt.BoxShape(halfBox, 0.0);
+            this.jolt.destroy(halfBox);
+            return box;
         }
 
         // Fallback: box sized from the transform scale.

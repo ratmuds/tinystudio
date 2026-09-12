@@ -1,385 +1,2933 @@
 {
-  "name": "Lunar Lander",
-  "description": "Retro physics lunar landing simulation. Fire thrusters with Space / W, control RCS with A / D, manage fuel, and touchdown safely on the landing pad!",
+  "name": "My Game",
+  "description": "",
   "components": [],
   "systems": [],
   "worlds": [
     {
-      "id": "world-lander",
-      "name": "Lunar Surface",
+      "id": "881fd8d6-1c18-4d31-a76e-d3d12707977e",
+      "name": "Main World",
       "entities": [
         {
-          "id": "moon-ground",
-          "name": "Moon Surface",
+          "id": "d7f4c434-2a74-4c11-8a0d-c1ca4ab25b10",
+          "name": "Ground",
           "baseEntity": "part",
+          "tags": [],
           "components": [
             {
-              "id": "c-mg-t",
+              "id": "aef1c0d2-768a-4fae-864e-aacdcd4c94d1",
               "name": "Transform",
-              "tooltip": "Transform",
+              "tooltip": "Position, rotation, and scale of the entity in 3D space.",
               "data": {
-                "position": { "type": "vec3", "value": { "x": 0, "y": -0.5, "z": 0 } },
-                "rotation": { "type": "vec3", "value": { "x": 0, "y": 0, "z": 0 } },
-                "scale": { "type": "vec3", "value": { "x": 60, "y": 1, "z": 60 } }
+                "position": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": 0,
+                    "y": -0.5,
+                    "z": 0
+                  },
+                  "tooltip": "Local position"
+                },
+                "rotation": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "tooltip": "Euler rotation in degrees"
+                },
+                "scale": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "value": {
+                    "x": 80,
+                    "y": 1,
+                    "z": 80
+                  },
+                  "tooltip": "Local scale"
+                }
               }
             },
             {
-              "id": "c-mg-m",
+              "id": "baf0d7b6-0f22-4700-be94-015a2a0a160d",
               "name": "Mesh",
-              "tooltip": "Mesh",
+              "tooltip": "Defines the visible 3D geometry of this entity.",
               "data": {
-                "geometryType": { "type": "string", "value": "box" },
-                "color": { "type": "color", "value": 1712419 },
-                "size": { "type": "vec3", "value": { "x": 1, "y": 1, "z": 1 } }
+                "geometryType": {
+                  "type": "string",
+                  "defaultValue": "box",
+                  "value": "box",
+                  "tooltip": "Shape: box, sphere, cylinder, or wedge"
+                },
+                "size": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "value": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "tooltip": "Dimensions of the mesh"
+                },
+                "color": {
+                  "type": "color",
+                  "defaultValue": 4500036,
+                  "value": "#d1d1d1",
+                  "tooltip": "Base color of the mesh"
+                },
+                "customGeometry": {
+                  "type": "json",
+                  "defaultValue": null,
+                  "value": null,
+                  "tooltip": "Serialized custom geometry (positions + index). Overrides primitive geometryType."
+                }
               }
             },
             {
-              "id": "c-mg-p",
+              "id": "f88bccc6-07d8-43f2-9c3e-a6f0b6edab54",
               "name": "Physics",
-              "tooltip": "Physics",
+              "tooltip": "Defines how this entity interacts with the physics simulation.",
               "data": {
-                "enabled": { "type": "boolean", "value": true },
-                "anchored": { "type": "boolean", "value": true }
+                "enabled": {
+                  "type": "boolean",
+                  "defaultValue": true,
+                  "value": true,
+                  "tooltip": "Whether the physics simulation is enabled for this entity"
+                },
+                "anchored": {
+                  "type": "boolean",
+                  "defaultValue": false,
+                  "value": true,
+                  "tooltip": "Whether the entity is anchored in place and does not move"
+                },
+                "mass": {
+                  "type": "number",
+                  "defaultValue": 1,
+                  "value": 1,
+                  "tooltip": "Mass of the rigid body in kg"
+                },
+                "customCollider": {
+                  "type": "model",
+                  "defaultValue": "",
+                  "value": "",
+                  "tooltip": "Optional custom collider model ID"
+                }
               }
             }
-          ]
+          ],
+          "children": []
         },
         {
-          "id": "landing-pad",
-          "name": "Landing Pad",
-          "baseEntity": "part",
+          "id": "86e7c50c-04a9-4f4c-9a84-3ad3541ac74c",
+          "name": "Player",
+          "baseEntity": "player",
+          "tags": [],
           "components": [
             {
-              "id": "c-lp-t",
+              "id": "86130d13-b5e7-4025-94c2-b742d8d255f6",
               "name": "Transform",
-              "tooltip": "Transform",
+              "tooltip": "Position, rotation, and scale of the entity in 3D space.",
               "data": {
-                "position": { "type": "vec3", "value": { "x": 0, "y": 0.08, "z": 0 } },
-                "rotation": { "type": "vec3", "value": { "x": 0, "y": 0, "z": 0 } },
-                "scale": { "type": "vec3", "value": { "x": 8, "y": 0.2, "z": 8 } }
+                "position": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": 0,
+                    "y": 30,
+                    "z": 0
+                  },
+                  "tooltip": "Local position"
+                },
+                "rotation": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "tooltip": "Euler rotation in degrees"
+                },
+                "scale": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "value": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "tooltip": "Local scale"
+                }
               }
             },
             {
-              "id": "c-lp-m",
+              "id": "c5e19336-e2ca-409c-bd29-46609a0cc3e3",
               "name": "Mesh",
-              "tooltip": "Mesh",
+              "tooltip": "Defines the visible 3D geometry of this entity.",
               "data": {
-                "geometryType": { "type": "string", "value": "cylinder" },
-                "color": { "type": "color", "value": 43988 },
-                "size": { "type": "vec3", "value": { "x": 1, "y": 1, "z": 1 } }
+                "geometryType": {
+                  "type": "string",
+                  "defaultValue": "box",
+                  "value": "cylinder",
+                  "tooltip": "Shape: box, sphere, cylinder, or wedge"
+                },
+                "size": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "value": {
+                    "x": 0.1,
+                    "y": 0.1,
+                    "z": 0.1
+                  },
+                  "tooltip": "Dimensions of the mesh"
+                },
+                "color": {
+                  "type": "color",
+                  "defaultValue": 4500036,
+                  "value": 959977,
+                  "tooltip": "Base color of the mesh"
+                },
+                "customGeometry": {
+                  "type": "json",
+                  "defaultValue": null,
+                  "value": null,
+                  "tooltip": "Serialized custom geometry (positions + index). Overrides primitive geometryType."
+                }
               }
             },
             {
-              "id": "c-lp-p",
+              "id": "0154f7a8-3f53-413f-b711-ebb99e187b64",
               "name": "Physics",
-              "tooltip": "Physics",
+              "tooltip": "Defines how this entity interacts with the physics simulation.",
               "data": {
-                "enabled": { "type": "boolean", "value": true },
-                "anchored": { "type": "boolean", "value": true }
-              }
-            }
-          ]
-        },
-        {
-          "id": "rock-1",
-          "name": "Lunar Rock A",
-          "baseEntity": "part",
-          "components": [
-            {
-              "id": "c-r1-t",
-              "name": "Transform",
-              "tooltip": "Transform",
-              "data": {
-                "position": { "type": "vec3", "value": { "x": 7, "y": 0.8, "z": 4 } },
-                "rotation": { "type": "vec3", "value": { "x": 0.2, "y": 0.6, "z": 0.1 } },
-                "scale": { "type": "vec3", "value": { "x": 3.2, "y": 1.8, "z": 2.8 } }
-              }
-            },
-            {
-              "id": "c-r1-m",
-              "name": "Mesh",
-              "tooltip": "Mesh",
-              "data": {
-                "geometryType": { "type": "string", "value": "box" },
-                "color": { "type": "color", "value": 3159868 },
-                "size": { "type": "vec3", "value": { "x": 1, "y": 1, "z": 1 } }
+                "enabled": {
+                  "type": "boolean",
+                  "defaultValue": true,
+                  "value": true,
+                  "tooltip": "Whether the physics simulation is enabled for this entity"
+                },
+                "anchored": {
+                  "type": "boolean",
+                  "defaultValue": false,
+                  "value": false,
+                  "tooltip": "Whether the entity is anchored in place and does not move"
+                },
+                "mass": {
+                  "type": "number",
+                  "defaultValue": 1,
+                  "value": 70,
+                  "tooltip": "Mass of the rigid body in kg"
+                },
+                "customCollider": {
+                  "type": "model",
+                  "defaultValue": "",
+                  "value": "",
+                  "tooltip": "Optional custom collider model ID"
+                }
               }
             },
             {
-              "id": "c-r1-p",
-              "name": "Physics",
-              "tooltip": "Physics",
+              "id": "6e9799de-b614-465b-9b53-bea74a8a3221",
+              "name": "PlayerController",
+              "tooltip": "Keyboard movement and jump controller for playable entities",
               "data": {
-                "enabled": { "type": "boolean", "value": true },
-                "anchored": { "type": "boolean", "value": true }
-              }
-            }
-          ]
-        },
-        {
-          "id": "rock-2",
-          "name": "Lunar Rock B",
-          "baseEntity": "part",
-          "components": [
-            {
-              "id": "c-r2-t",
-              "name": "Transform",
-              "tooltip": "Transform",
-              "data": {
-                "position": { "type": "vec3", "value": { "x": -8, "y": 1.1, "z": -5 } },
-                "rotation": { "type": "vec3", "value": { "x": -0.1, "y": 1.2, "z": 0.3 } },
-                "scale": { "type": "vec3", "value": { "x": 4.0, "y": 2.2, "z": 3.4 } }
-              }
-            },
-            {
-              "id": "c-r2-m",
-              "name": "Mesh",
-              "tooltip": "Mesh",
-              "data": {
-                "geometryType": { "type": "string", "value": "box" },
-                "color": { "type": "color", "value": 2633519 },
-                "size": { "type": "vec3", "value": { "x": 1, "y": 1, "z": 1 } }
+                "speed": {
+                  "type": "number",
+                  "defaultValue": 8,
+                  "value": 0,
+                  "tooltip": "Movement speed in units per second"
+                },
+                "jumpForce": {
+                  "type": "number",
+                  "defaultValue": 9,
+                  "value": 0,
+                  "tooltip": "Upward jump impulse velocity"
+                },
+                "airControl": {
+                  "type": "number",
+                  "defaultValue": 0.6,
+                  "value": 0,
+                  "tooltip": "Air movement multiplier while jumping"
+                },
+                "enabled": {
+                  "type": "boolean",
+                  "defaultValue": true,
+                  "value": false,
+                  "tooltip": "Whether player input controls this entity"
+                }
               }
             },
             {
-              "id": "c-r2-p",
-              "name": "Physics",
-              "tooltip": "Physics",
-              "data": {
-                "enabled": { "type": "boolean", "value": true },
-                "anchored": { "type": "boolean", "value": true }
-              }
-            }
-          ]
-        },
-        {
-          "id": "lander-module",
-          "name": "Lunar Lander",
-          "baseEntity": "part",
-          "components": [
-            {
-              "id": "c-lm-t",
-              "name": "Transform",
-              "tooltip": "Transform",
-              "data": {
-                "position": { "type": "vec3", "value": { "x": 0, "y": 16.5, "z": 0 } },
-                "rotation": { "type": "vec3", "value": { "x": 0, "y": 0, "z": 0 } },
-                "scale": { "type": "vec3", "value": { "x": 2.2, "y": 1.8, "z": 2.2 } }
-              }
-            },
-            {
-              "id": "c-lm-m",
-              "name": "Mesh",
-              "tooltip": "Mesh",
-              "data": {
-                "geometryType": { "type": "string", "value": "cylinder" },
-                "color": { "type": "color", "value": 15856113 },
-                "size": { "type": "vec3", "value": { "x": 1, "y": 1, "z": 1 } }
-              }
-            },
-            {
-              "id": "c-lm-p",
-              "name": "Physics",
-              "tooltip": "Physics",
-              "data": {
-                "enabled": { "type": "boolean", "value": true },
-                "anchored": { "type": "boolean", "value": false },
-                "mass": { "type": "number", "value": 12 }
-              }
-            },
-            {
-              "id": "c-lm-s",
+              "id": "de521590-8109-4254-8e68-b44efb2182ff",
               "name": "Script",
-              "tooltip": "Script",
+              "tooltip": "Attaches a script to this entity. Holds per-instance stateData (JSON object) and scriptData (JSON list of blocks, each with a `code` field).",
               "data": {
-                "scriptId": { "type": "string", "value": "script-lander" }
+                "scriptId": {
+                  "type": "script",
+                  "defaultValue": "",
+                  "value": "5489cbc2-808a-4191-bfa6-b7e0ded95aef",
+                  "tooltip": "ID of the authored script in gameData.scripts[] to attach"
+                },
+                "stateData": {
+                  "type": "json",
+                  "defaultValue": {},
+                  "value": {},
+                  "tooltip": "Per-instance state (JSON object)"
+                },
+                "scriptData": {
+                  "type": "jsonList",
+                  "defaultValue": [
+                    {
+                      "code": ""
+                    }
+                  ],
+                  "value": [
+                    {
+                      "code": ""
+                    }
+                  ],
+                  "tooltip": "Per-instance script blocks (JSON list; each block has a `code` field)"
+                }
               }
             }
-          ]
+          ],
+          "children": []
         },
         {
-          "id": "cam-lander",
-          "name": "Lander Camera",
+          "id": "45080701-a83d-4c2f-a244-d04bfe2b2bbb",
+          "name": "Follow Camera",
           "baseEntity": "camera",
+          "tags": [],
           "components": [
             {
-              "id": "c-cl-t",
+              "id": "95cfc695-91b3-46c1-9ead-3d2868b3f845",
               "name": "Transform",
-              "tooltip": "Transform",
+              "tooltip": "Position, rotation, and scale of the entity in 3D space.",
               "data": {
-                "position": { "type": "vec3", "value": { "x": 0, "y": 12, "z": 22 } },
-                "rotation": { "type": "vec3", "value": { "x": -0.25, "y": 0, "z": 0 } },
-                "scale": { "type": "vec3", "value": { "x": 1, "y": 1, "z": 1 } }
+                "position": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "tooltip": "Local position"
+                },
+                "rotation": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "tooltip": "Euler rotation in degrees"
+                },
+                "scale": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "value": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "tooltip": "Local scale"
+                }
               }
             },
             {
-              "id": "c-cl-c",
+              "id": "cbc1c83f-16d0-43d0-920d-794dc79447d0",
               "name": "Camera",
-              "tooltip": "Camera",
+              "tooltip": "Controls the active viewport camera. mode: fixed, orbit (around target), firstPerson (FPS), or fly (free flight).",
               "data": {
-                "active": { "type": "boolean", "value": true },
-                "mode": { "type": "string", "value": "follow" },
-                "fov": { "type": "number", "value": 52 }
+                "active": {
+                  "type": "boolean",
+                  "defaultValue": false,
+                  "value": true,
+                  "tooltip": "Whether this is the active camera in play mode"
+                },
+                "mode": {
+                  "type": "string",
+                  "defaultValue": "orbit",
+                  "value": "follow",
+                  "tooltip": "Camera mode: fixed, orbit, firstPerson, or fly"
+                },
+                "fov": {
+                  "type": "number",
+                  "defaultValue": 75,
+                  "value": 75,
+                  "tooltip": "Vertical field of view in degrees"
+                },
+                "target": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "tooltip": "Look-at point (fixed/orbit) or initial view direction (firstPerson)"
+                },
+                "distance": {
+                  "type": "number",
+                  "defaultValue": 8,
+                  "value": 15,
+                  "tooltip": "Orbit distance from target"
+                },
+                "yaw": {
+                  "type": "number",
+                  "defaultValue": 0,
+                  "value": 0,
+                  "tooltip": "Orbit yaw in radians"
+                },
+                "pitch": {
+                  "type": "number",
+                  "defaultValue": 0,
+                  "value": 0,
+                  "tooltip": "Orbit pitch in radians"
+                },
+                "moveSpeed": {
+                  "type": "number",
+                  "defaultValue": 8,
+                  "value": 8,
+                  "tooltip": "firstPerson/fly movement speed"
+                }
               }
             }
-          ]
+          ],
+          "children": []
         },
         {
-          "id": "hud-title",
-          "name": "HUD_Title",
-          "baseEntity": "ui",
+          "id": "f77e35ce-24b1-4dc6-80ba-aed00005b509",
+          "name": "Lander Instance",
+          "baseEntity": "custom",
+          "tags": [],
           "components": [
             {
-              "id": "c-ht-ui",
-              "name": "UI",
-              "tooltip": "UI",
+              "id": "df73d88b-bcab-45f0-8b9e-dc10e056c449",
+              "name": "Transform",
+              "tooltip": "Position, rotation, and scale of the entity in 3D space.",
               "data": {
-                "type": { "type": "string", "value": "text" },
-                "text": { "type": "string", "value": "🚀 APOLLO LUNAR LANDER" },
-                "x": { "type": "number", "value": 20 },
-                "y": { "type": "number", "value": 20 },
-                "width": { "type": "number", "value": 280 },
-                "height": { "type": "number", "value": 30 },
-                "fontSize": { "type": "number", "value": 13 },
-                "color": { "type": "string", "value": "#38bdf8" },
-                "backgroundColor": { "type": "string", "value": "rgba(15, 23, 42, 0.85)" },
-                "visible": { "type": "boolean", "value": true }
+                "position": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": 0,
+                    "y": 30,
+                    "z": 0
+                  },
+                  "tooltip": "Local position"
+                },
+                "rotation": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "tooltip": "Euler rotation in degrees"
+                },
+                "scale": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "value": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "tooltip": "Local scale"
+                }
+              }
+            },
+            {
+              "id": "f25e981b-7ac6-4405-9f17-216f31acd814",
+              "name": "ModelRef",
+              "tooltip": "References a model by ID. The entity renders as an instance of that model.",
+              "data": {
+                "modelId": {
+                  "type": "string",
+                  "defaultValue": "f40a5e8c-0007-4653-bf88-6cef310b3a6f",
+                  "value": "f40a5e8c-0007-4653-bf88-6cef310b3a6f",
+                  "tooltip": "ID of the model in gameData.models[]"
+                }
               }
             }
-          ]
+          ],
+          "children": []
         },
         {
-          "id": "hud-alt",
-          "name": "HUD_Alt",
-          "baseEntity": "ui",
+          "id": "f9db32ec-11af-4289-b9fa-9e244372c7c7",
+          "name": "Part 5",
+          "baseEntity": "part",
+          "tags": [],
           "components": [
             {
-              "id": "c-ha-ui",
-              "name": "UI",
-              "tooltip": "UI",
+              "id": "a569dbba-011a-456c-b2f8-b71b9c10c581",
+              "name": "Transform",
+              "tooltip": "Position, rotation, and scale of the entity in 3D space.",
               "data": {
-                "type": { "type": "string", "value": "text" },
-                "text": { "type": "string", "value": "📏 ALT: 16.5 m" },
-                "x": { "type": "number", "value": 20 },
-                "y": { "type": "number", "value": 54 },
-                "width": { "type": "number", "value": 135 },
-                "height": { "type": "number", "value": 28 },
-                "fontSize": { "type": "number", "value": 12 },
-                "color": { "type": "string", "value": "#ffffff" },
-                "backgroundColor": { "type": "string", "value": "rgba(30, 41, 59, 0.85)" },
-                "visible": { "type": "boolean", "value": true }
+                "position": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": -12.008,
+                    "y": 1.208,
+                    "z": 7.846
+                  },
+                  "tooltip": "Local position"
+                },
+                "rotation": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": -0.425,
+                    "y": -0.188,
+                    "z": -0.562
+                  },
+                  "tooltip": "Euler rotation in degrees"
+                },
+                "scale": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "value": {
+                    "x": 8,
+                    "y": 8,
+                    "z": 8
+                  },
+                  "tooltip": "Local scale"
+                }
+              }
+            },
+            {
+              "id": "356d2aaa-4ffc-42bb-8333-c528c116bf2a",
+              "name": "Mesh",
+              "tooltip": "Defines the visible 3D geometry of this entity.",
+              "data": {
+                "geometryType": {
+                  "type": "string",
+                  "defaultValue": "box",
+                  "value": "box",
+                  "tooltip": "Shape: box, sphere, cylinder, or wedge"
+                },
+                "size": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "value": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "tooltip": "Dimensions of the mesh"
+                },
+                "color": {
+                  "type": "color",
+                  "defaultValue": 4500036,
+                  "value": "#c2c2c2",
+                  "tooltip": "Base color of the mesh"
+                },
+                "customGeometry": {
+                  "type": "json",
+                  "defaultValue": null,
+                  "value": null,
+                  "tooltip": "Serialized custom geometry (positions + index). Overrides primitive geometryType."
+                }
+              }
+            },
+            {
+              "id": "25c44eda-e913-4a80-aadb-ef0a9742326e",
+              "name": "Physics",
+              "tooltip": "Defines how this entity interacts with the physics simulation.",
+              "data": {
+                "enabled": {
+                  "type": "boolean",
+                  "defaultValue": true,
+                  "value": true,
+                  "tooltip": "Whether the physics simulation is enabled for this entity"
+                },
+                "anchored": {
+                  "type": "boolean",
+                  "defaultValue": false,
+                  "value": true,
+                  "tooltip": "Whether the entity is anchored in place and does not move"
+                },
+                "mass": {
+                  "type": "number",
+                  "defaultValue": 1,
+                  "value": 1,
+                  "tooltip": "Mass of the rigid body in kg"
+                },
+                "customCollider": {
+                  "type": "model",
+                  "defaultValue": "",
+                  "value": "",
+                  "tooltip": "Optional custom collider model ID"
+                }
               }
             }
-          ]
+          ],
+          "children": []
         },
         {
-          "id": "hud-speed",
-          "name": "HUD_Speed",
-          "baseEntity": "ui",
+          "id": "cb9ec082-5d1e-4fc0-bc5c-64b5ac87faa1",
+          "name": "Rocks Instance",
+          "baseEntity": "custom",
+          "tags": [],
           "components": [
             {
-              "id": "c-hs-ui",
-              "name": "UI",
-              "tooltip": "UI",
+              "id": "899f9b54-1e40-4029-8bf9-fe7cfdc1a992",
+              "name": "Transform",
+              "tooltip": "Position, rotation, and scale of the entity in 3D space.",
               "data": {
-                "type": { "type": "string", "value": "text" },
-                "text": { "type": "string", "value": "⚡ V-SPD: 0.0 m/s" },
-                "x": { "type": "number", "value": 160 },
-                "y": { "type": "number", "value": 54 },
-                "width": { "type": "number", "value": 140 },
-                "height": { "type": "number", "value": 28 },
-                "fontSize": { "type": "number", "value": 12 },
-                "color": { "type": "string", "value": "#22c55e" },
-                "backgroundColor": { "type": "string", "value": "rgba(30, 41, 59, 0.85)" },
-                "visible": { "type": "boolean", "value": true }
+                "position": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": -0.607,
+                    "y": 0.5,
+                    "z": -4.432
+                  },
+                  "tooltip": "Local position"
+                },
+                "rotation": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": -2.959,
+                    "y": 0.797,
+                    "z": 2.994
+                  },
+                  "tooltip": "Euler rotation in degrees"
+                },
+                "scale": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "value": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "tooltip": "Local scale"
+                }
+              }
+            },
+            {
+              "id": "b9e63ffb-f903-460d-8168-9b779ee6c235",
+              "name": "ModelRef",
+              "tooltip": "References a model by ID. The entity renders as an instance of that model.",
+              "data": {
+                "modelId": {
+                  "type": "string",
+                  "defaultValue": "ab1d58f2-d2c9-4a00-9a29-a2ba1395dc2a",
+                  "value": "ab1d58f2-d2c9-4a00-9a29-a2ba1395dc2a",
+                  "tooltip": "ID of the model in gameData.models[]"
+                }
               }
             }
-          ]
+          ],
+          "children": []
         },
         {
-          "id": "hud-fuel",
-          "name": "HUD_Fuel",
-          "baseEntity": "ui",
+          "id": "ca8c4faa-7ba1-4c9f-9b5e-4033875192dd",
+          "name": "Rocks Instance",
+          "baseEntity": "custom",
+          "tags": [],
           "components": [
             {
-              "id": "c-hf-ui",
-              "name": "UI",
-              "tooltip": "UI",
+              "id": "d0f68c2a-716d-44ed-9b60-5cd19f17b912",
+              "name": "Transform",
+              "tooltip": "Position, rotation, and scale of the entity in 3D space.",
               "data": {
-                "type": { "type": "string", "value": "text" },
-                "text": { "type": "string", "value": "⛽ FUEL: 100%" },
-                "x": { "type": "number", "value": 20 },
-                "y": { "type": "number", "value": 86 },
-                "width": { "type": "number", "value": 280 },
-                "height": { "type": "number", "value": 28 },
-                "fontSize": { "type": "number", "value": 12 },
-                "color": { "type": "string", "value": "#22c55e" },
-                "backgroundColor": { "type": "string", "value": "rgba(30, 41, 59, 0.85)" },
-                "visible": { "type": "boolean", "value": true }
+                "position": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": -26.782,
+                    "y": 0.5,
+                    "z": -13.974
+                  },
+                  "tooltip": "Local position"
+                },
+                "rotation": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "tooltip": "Euler rotation in degrees"
+                },
+                "scale": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "value": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "tooltip": "Local scale"
+                }
+              }
+            },
+            {
+              "id": "fc2baec1-d527-431c-899f-1b9bef13d2a6",
+              "name": "ModelRef",
+              "tooltip": "References a model by ID. The entity renders as an instance of that model.",
+              "data": {
+                "modelId": {
+                  "type": "string",
+                  "defaultValue": "ab1d58f2-d2c9-4a00-9a29-a2ba1395dc2a",
+                  "value": "ab1d58f2-d2c9-4a00-9a29-a2ba1395dc2a",
+                  "tooltip": "ID of the model in gameData.models[]"
+                }
               }
             }
-          ]
+          ],
+          "children": []
         },
         {
-          "id": "hud-status",
-          "name": "HUD_Status",
-          "baseEntity": "ui",
+          "id": "64cb6b3d-5d0f-41f1-bf18-02212c9f4a9b",
+          "name": "Rocks Instance",
+          "baseEntity": "custom",
+          "tags": [],
           "components": [
             {
-              "id": "c-hst-ui",
-              "name": "UI",
-              "tooltip": "UI",
+              "id": "535fb817-f957-4a57-af7b-6f656485d9eb",
+              "name": "Transform",
+              "tooltip": "Position, rotation, and scale of the entity in 3D space.",
               "data": {
-                "type": { "type": "string", "value": "text" },
-                "text": { "type": "string", "value": "🛰 DESCENT IN PROGRESS..." },
-                "x": { "type": "number", "value": 20 },
-                "y": { "type": "number", "value": 118 },
-                "width": { "type": "number", "value": 280 },
-                "height": { "type": "number", "value": 30 },
-                "fontSize": { "type": "number", "value": 12 },
-                "color": { "type": "string", "value": "#ffffff" },
-                "backgroundColor": { "type": "string", "value": "rgba(30, 58, 138, 0.85)" },
-                "visible": { "type": "boolean", "value": true }
+                "position": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": -0.576,
+                    "y": 0.5,
+                    "z": 17.124
+                  },
+                  "tooltip": "Local position"
+                },
+                "rotation": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "tooltip": "Euler rotation in degrees"
+                },
+                "scale": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "value": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "tooltip": "Local scale"
+                }
+              }
+            },
+            {
+              "id": "86e783cf-d714-4d37-bfaa-8ba414c015ba",
+              "name": "ModelRef",
+              "tooltip": "References a model by ID. The entity renders as an instance of that model.",
+              "data": {
+                "modelId": {
+                  "type": "string",
+                  "defaultValue": "ab1d58f2-d2c9-4a00-9a29-a2ba1395dc2a",
+                  "value": "ab1d58f2-d2c9-4a00-9a29-a2ba1395dc2a",
+                  "tooltip": "ID of the model in gameData.models[]"
+                }
               }
             }
-          ]
+          ],
+          "children": []
         },
         {
-          "id": "hud-guide",
-          "name": "HUD_Guide",
-          "baseEntity": "ui",
+          "id": "b1e47310-d902-4073-9cae-fa84eb967f86",
+          "name": "Rocks Instance",
+          "baseEntity": "custom",
+          "tags": [],
           "components": [
             {
-              "id": "c-hg-ui",
-              "name": "UI",
-              "tooltip": "UI",
+              "id": "41424aa6-2033-4e93-a985-34ccb5c36b26",
+              "name": "Transform",
+              "tooltip": "Position, rotation, and scale of the entity in 3D space.",
               "data": {
-                "type": { "type": "string", "value": "text" },
-                "text": { "type": "string", "value": "🕹 W / SPACE: Main Thruster • A / D: RCS Thrusters • Touch down gently on the Cyan Pad!" },
-                "x": { "type": "number", "value": 20 },
-                "y": { "type": "number", "value": 152 },
-                "width": { "type": "number", "value": 520 },
-                "height": { "type": "number", "value": 28 },
-                "fontSize": { "type": "number", "value": 11 },
-                "color": { "type": "string", "value": "#94a3b8" },
-                "backgroundColor": { "type": "string", "value": "rgba(15, 23, 42, 0.75)" },
-                "visible": { "type": "boolean", "value": true }
+                "position": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": 18.067,
+                    "y": 0.5,
+                    "z": 4.388
+                  },
+                  "tooltip": "Local position"
+                },
+                "rotation": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "tooltip": "Euler rotation in degrees"
+                },
+                "scale": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "value": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "tooltip": "Local scale"
+                }
+              }
+            },
+            {
+              "id": "260bfc33-e200-44d3-b1d2-1ab5c48bb735",
+              "name": "ModelRef",
+              "tooltip": "References a model by ID. The entity renders as an instance of that model.",
+              "data": {
+                "modelId": {
+                  "type": "string",
+                  "defaultValue": "ab1d58f2-d2c9-4a00-9a29-a2ba1395dc2a",
+                  "value": "ab1d58f2-d2c9-4a00-9a29-a2ba1395dc2a",
+                  "tooltip": "ID of the model in gameData.models[]"
+                }
               }
             }
-          ]
+          ],
+          "children": []
+        },
+        {
+          "id": "a79f9274-2ba7-4fc1-83e4-fc44246984ce",
+          "name": "Rocks Instance",
+          "baseEntity": "custom",
+          "tags": [],
+          "components": [
+            {
+              "id": "c63b7308-adf9-4046-9470-1cafb58cfc4d",
+              "name": "Transform",
+              "tooltip": "Position, rotation, and scale of the entity in 3D space.",
+              "data": {
+                "position": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": 0.102,
+                    "y": 0.5,
+                    "z": 4.786
+                  },
+                  "tooltip": "Local position"
+                },
+                "rotation": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "tooltip": "Euler rotation in degrees"
+                },
+                "scale": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "value": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "tooltip": "Local scale"
+                }
+              }
+            },
+            {
+              "id": "16089922-7c1f-4b41-a4c8-ad9b03e5db24",
+              "name": "ModelRef",
+              "tooltip": "References a model by ID. The entity renders as an instance of that model.",
+              "data": {
+                "modelId": {
+                  "type": "string",
+                  "defaultValue": "ab1d58f2-d2c9-4a00-9a29-a2ba1395dc2a",
+                  "value": "ab1d58f2-d2c9-4a00-9a29-a2ba1395dc2a",
+                  "tooltip": "ID of the model in gameData.models[]"
+                }
+              }
+            }
+          ],
+          "children": []
+        },
+        {
+          "id": "1eb90da8-2a38-4d7e-b6c5-783c0bb49f37",
+          "name": "Rocks Instance",
+          "baseEntity": "custom",
+          "tags": [],
+          "components": [
+            {
+              "id": "915f10ad-05ef-41f2-942a-2befed5772d2",
+              "name": "Transform",
+              "tooltip": "Position, rotation, and scale of the entity in 3D space.",
+              "data": {
+                "position": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": -15.861,
+                    "y": 9.094,
+                    "z": -32.279
+                  },
+                  "tooltip": "Local position"
+                },
+                "rotation": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": 0,
+                    "y": 0,
+                    "z": -0.246
+                  },
+                  "tooltip": "Euler rotation in degrees"
+                },
+                "scale": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "value": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "tooltip": "Local scale"
+                }
+              }
+            },
+            {
+              "id": "b7a3752c-9cbb-4b96-8989-e77dacbb3fdf",
+              "name": "ModelRef",
+              "tooltip": "References a model by ID. The entity renders as an instance of that model.",
+              "data": {
+                "modelId": {
+                  "type": "string",
+                  "defaultValue": "ab1d58f2-d2c9-4a00-9a29-a2ba1395dc2a",
+                  "value": "ab1d58f2-d2c9-4a00-9a29-a2ba1395dc2a",
+                  "tooltip": "ID of the model in gameData.models[]"
+                }
+              }
+            }
+          ],
+          "children": []
+        },
+        {
+          "id": "33beba0c-bc50-463b-b31a-693f494ec03d",
+          "name": "UIText 1",
+          "baseEntity": "ui",
+          "tags": [],
+          "components": [
+            {
+              "id": "747c6082-e3d0-41c5-8855-4fa2f8a3123f",
+              "name": "UI",
+              "tooltip": "Screen UI element rendered directly over the game viewport",
+              "data": {
+                "type": {
+                  "type": "string",
+                  "defaultValue": "text",
+                  "value": "text",
+                  "tooltip": "UI element type: button or text"
+                },
+                "text": {
+                  "type": "string",
+                  "defaultValue": "Sample Text",
+                  "value": "Lunar Lander Demo",
+                  "tooltip": "Displayed text"
+                },
+                "x": {
+                  "type": "number",
+                  "defaultValue": 20,
+                  "value": 20,
+                  "tooltip": "X position in pixels from the left"
+                },
+                "y": {
+                  "type": "number",
+                  "defaultValue": 20,
+                  "value": 20,
+                  "tooltip": "Y position in pixels from the top"
+                },
+                "width": {
+                  "type": "number",
+                  "defaultValue": 200,
+                  "value": 200,
+                  "tooltip": "Width in pixels"
+                },
+                "height": {
+                  "type": "number",
+                  "defaultValue": 32,
+                  "value": 32,
+                  "tooltip": "Height in pixels"
+                },
+                "color": {
+                  "type": "color",
+                  "defaultValue": "#ffffff",
+                  "value": "#4da3ff",
+                  "tooltip": "Text color"
+                },
+                "backgroundColor": {
+                  "type": "color",
+                  "defaultValue": "#1c1c1c",
+                  "value": "#1c1c1c",
+                  "tooltip": "Background color"
+                },
+                "fontSize": {
+                  "type": "number",
+                  "defaultValue": 14,
+                  "value": 14,
+                  "tooltip": "Font size in pixels"
+                },
+                "visible": {
+                  "type": "boolean",
+                  "defaultValue": true,
+                  "value": true,
+                  "tooltip": "Whether this UI element is visible"
+                }
+              }
+            }
+          ],
+          "children": []
+        },
+        {
+          "id": "fad3ab84-d773-445a-b730-b9decbce96bc",
+          "name": "UIText 2",
+          "baseEntity": "ui",
+          "tags": [],
+          "components": [
+            {
+              "id": "ab97bfcd-2bf5-42aa-91fb-fc7dd3be6a17",
+              "name": "UI",
+              "tooltip": "Screen UI element rendered directly over the game viewport",
+              "data": {
+                "type": {
+                  "type": "string",
+                  "defaultValue": "text",
+                  "value": "text",
+                  "tooltip": "UI element type: button or text"
+                },
+                "text": {
+                  "type": "string",
+                  "defaultValue": "Sample Text",
+                  "value": "W & D to Navigate",
+                  "tooltip": "Displayed text"
+                },
+                "x": {
+                  "type": "number",
+                  "defaultValue": 20,
+                  "value": 20,
+                  "tooltip": "X position in pixels from the left"
+                },
+                "y": {
+                  "type": "number",
+                  "defaultValue": 20,
+                  "value": 60,
+                  "tooltip": "Y position in pixels from the top"
+                },
+                "width": {
+                  "type": "number",
+                  "defaultValue": 200,
+                  "value": 200,
+                  "tooltip": "Width in pixels"
+                },
+                "height": {
+                  "type": "number",
+                  "defaultValue": 32,
+                  "value": 32,
+                  "tooltip": "Height in pixels"
+                },
+                "color": {
+                  "type": "color",
+                  "defaultValue": "#ffffff",
+                  "value": "#ffffff",
+                  "tooltip": "Text color"
+                },
+                "backgroundColor": {
+                  "type": "color",
+                  "defaultValue": "#1c1c1c",
+                  "value": "#1c1c1c",
+                  "tooltip": "Background color"
+                },
+                "fontSize": {
+                  "type": "number",
+                  "defaultValue": 14,
+                  "value": 14,
+                  "tooltip": "Font size in pixels"
+                },
+                "visible": {
+                  "type": "boolean",
+                  "defaultValue": true,
+                  "value": true,
+                  "tooltip": "Whether this UI element is visible"
+                }
+              }
+            }
+          ],
+          "children": []
+        },
+        {
+          "id": "f513eb1f-b7f7-4b3c-8dcb-74e49698edc4",
+          "name": "UIText 3",
+          "baseEntity": "ui",
+          "tags": [],
+          "components": [
+            {
+              "id": "a37eac41-25ce-4a41-8b35-7234809e10e5",
+              "name": "UI",
+              "tooltip": "Screen UI element rendered directly over the game viewport",
+              "data": {
+                "type": {
+                  "type": "string",
+                  "defaultValue": "text",
+                  "value": "text",
+                  "tooltip": "UI element type: button or text"
+                },
+                "text": {
+                  "type": "string",
+                  "defaultValue": "Sample Text",
+                  "value": "Current Speed",
+                  "tooltip": "Displayed text"
+                },
+                "x": {
+                  "type": "number",
+                  "defaultValue": 20,
+                  "value": 20,
+                  "tooltip": "X position in pixels from the left"
+                },
+                "y": {
+                  "type": "number",
+                  "defaultValue": 20,
+                  "value": 100,
+                  "tooltip": "Y position in pixels from the top"
+                },
+                "width": {
+                  "type": "number",
+                  "defaultValue": 200,
+                  "value": 200,
+                  "tooltip": "Width in pixels"
+                },
+                "height": {
+                  "type": "number",
+                  "defaultValue": 32,
+                  "value": 32,
+                  "tooltip": "Height in pixels"
+                },
+                "color": {
+                  "type": "color",
+                  "defaultValue": "#ffffff",
+                  "value": "#ffffff",
+                  "tooltip": "Text color"
+                },
+                "backgroundColor": {
+                  "type": "color",
+                  "defaultValue": "#1c1c1c",
+                  "value": "#1c1c1c",
+                  "tooltip": "Background color"
+                },
+                "fontSize": {
+                  "type": "number",
+                  "defaultValue": 14,
+                  "value": 14,
+                  "tooltip": "Font size in pixels"
+                },
+                "visible": {
+                  "type": "boolean",
+                  "defaultValue": true,
+                  "value": true,
+                  "tooltip": "Whether this UI element is visible"
+                }
+              }
+            }
+          ],
+          "children": []
+        },
+        {
+          "id": "326ac465-27d6-46d5-98d5-e46bf77b9298",
+          "name": "UIText 4",
+          "baseEntity": "ui",
+          "tags": [],
+          "components": [
+            {
+              "id": "f0f6c034-1c75-4142-b896-6c321bb66c93",
+              "name": "UI",
+              "tooltip": "Screen UI element rendered directly over the game viewport",
+              "data": {
+                "type": {
+                  "type": "string",
+                  "defaultValue": "text",
+                  "value": "text",
+                  "tooltip": "UI element type: button or text"
+                },
+                "text": {
+                  "type": "string",
+                  "defaultValue": "Sample Text",
+                  "value": "Landing Status",
+                  "tooltip": "Displayed text"
+                },
+                "x": {
+                  "type": "number",
+                  "defaultValue": 20,
+                  "value": 20,
+                  "tooltip": "X position in pixels from the left"
+                },
+                "y": {
+                  "type": "number",
+                  "defaultValue": 20,
+                  "value": 180,
+                  "tooltip": "Y position in pixels from the top"
+                },
+                "width": {
+                  "type": "number",
+                  "defaultValue": 200,
+                  "value": 500,
+                  "tooltip": "Width in pixels"
+                },
+                "height": {
+                  "type": "number",
+                  "defaultValue": 32,
+                  "value": 100,
+                  "tooltip": "Height in pixels"
+                },
+                "color": {
+                  "type": "color",
+                  "defaultValue": "#ffffff",
+                  "value": "#ffffff",
+                  "tooltip": "Text color"
+                },
+                "backgroundColor": {
+                  "type": "color",
+                  "defaultValue": "#1c1c1c",
+                  "value": "#1c1c1c",
+                  "tooltip": "Background color"
+                },
+                "fontSize": {
+                  "type": "number",
+                  "defaultValue": 14,
+                  "value": 30,
+                  "tooltip": "Font size in pixels"
+                },
+                "visible": {
+                  "type": "boolean",
+                  "defaultValue": true,
+                  "value": false,
+                  "tooltip": "Whether this UI element is visible"
+                }
+              }
+            }
+          ],
+          "children": []
+        },
+        {
+          "id": "dfd06144-adeb-40da-aec2-7546d7c84518",
+          "name": "UIText 5",
+          "baseEntity": "ui",
+          "tags": [],
+          "components": [
+            {
+              "id": "68398568-c038-462f-ba53-a6eac3a48bc1",
+              "name": "UI",
+              "tooltip": "Screen UI element rendered directly over the game viewport",
+              "data": {
+                "type": {
+                  "type": "string",
+                  "defaultValue": "text",
+                  "value": "text",
+                  "tooltip": "UI element type: button or text"
+                },
+                "text": {
+                  "type": "string",
+                  "defaultValue": "Sample Text",
+                  "value": "Current Altitude",
+                  "tooltip": "Displayed text"
+                },
+                "x": {
+                  "type": "number",
+                  "defaultValue": 20,
+                  "value": 20,
+                  "tooltip": "X position in pixels from the left"
+                },
+                "y": {
+                  "type": "number",
+                  "defaultValue": 20,
+                  "value": 140,
+                  "tooltip": "Y position in pixels from the top"
+                },
+                "width": {
+                  "type": "number",
+                  "defaultValue": 200,
+                  "value": 200,
+                  "tooltip": "Width in pixels"
+                },
+                "height": {
+                  "type": "number",
+                  "defaultValue": 32,
+                  "value": 32,
+                  "tooltip": "Height in pixels"
+                },
+                "color": {
+                  "type": "color",
+                  "defaultValue": "#ffffff",
+                  "value": "#ffffff",
+                  "tooltip": "Text color"
+                },
+                "backgroundColor": {
+                  "type": "color",
+                  "defaultValue": "#1c1c1c",
+                  "value": "#1c1c1c",
+                  "tooltip": "Background color"
+                },
+                "fontSize": {
+                  "type": "number",
+                  "defaultValue": 14,
+                  "value": 14,
+                  "tooltip": "Font size in pixels"
+                },
+                "visible": {
+                  "type": "boolean",
+                  "defaultValue": true,
+                  "value": true,
+                  "tooltip": "Whether this UI element is visible"
+                }
+              }
+            }
+          ],
+          "children": []
         }
       ]
     }
   ],
-  "models": [],
+  "models": [
+    {
+      "id": "f40a5e8c-0007-4653-bf88-6cef310b3a6f",
+      "name": "Lander",
+      "thumbnail": "",
+      "entities": [
+        {
+          "id": "55f71bcc-9866-4734-ac52-852961182e7d",
+          "name": "CSG Result",
+          "baseEntity": "part",
+          "tags": [],
+          "components": [
+            {
+              "id": "8a2f7a28-3d57-4eb7-bdf6-f4dfa2d522d0",
+              "name": "Transform",
+              "tooltip": "Position, rotation, and scale of the entity in 3D space.",
+              "data": {
+                "position": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "tooltip": "Local position"
+                },
+                "rotation": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "tooltip": "Euler rotation in degrees"
+                },
+                "scale": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "value": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "tooltip": "Local scale"
+                }
+              }
+            },
+            {
+              "id": "937c85ba-b8cb-46d7-97bb-a6843eded328",
+              "name": "Mesh",
+              "tooltip": "Defines the visible 3D geometry of this entity.",
+              "data": {
+                "geometryType": {
+                  "type": "string",
+                  "defaultValue": "box",
+                  "value": "custom",
+                  "tooltip": "Shape: box, sphere, cylinder, or wedge"
+                },
+                "size": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "value": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "tooltip": "Dimensions of the mesh"
+                },
+                "color": {
+                  "type": "color",
+                  "defaultValue": 4500036,
+                  "value": 14935011,
+                  "tooltip": "Base color of the mesh"
+                },
+                "customGeometry": {
+                  "type": "json",
+                  "defaultValue": null,
+                  "value": {
+                    "positions": [
+                      -1.389467716217041,
+                      -1.6705751419067383,
+                      -1.4590859413146973,
+                      -1.2571160793304443,
+                      -0.6880921125411987,
+                      -1.3278985023498535,
+                      -0.8938663601875305,
+                      -1.7361688613891602,
+                      -1.4678444862365723,
+                      -1.389467716217041,
+                      -1.7367510795593262,
+                      -0.9634845852851868,
+                      -1.2571160793304443,
+                      -0.7542679905891418,
+                      -0.832297146320343,
+                      -0.8938663601875305,
+                      -1.802344799041748,
+                      -0.9722430109977722,
+                      -0.9295029044151306,
+                      -1.197655200958252,
+                      -0.8915010094642639,
+                      -0.7615146040916443,
+                      -0.7536858320236206,
+                      -1.3366570472717285,
+                      -0.8124077320098877,
+                      -1.197655200958252,
+                      -0.8915010094642639,
+                      -0.8153848052024841,
+                      -1.197655200958252,
+                      -1.05995774269104,
+                      -0.9295029044151306,
+                      -0.7976281642913818,
+                      -0.8380867838859558,
+                      -0.7615146040916443,
+                      -0.7906324863433838,
+                      -1.05995774269104,
+                      -0.9295029044151306,
+                      -1.197655200958252,
+                      0.9378235936164856,
+                      -0.9295029044151306,
+                      -0.7680025696754456,
+                      -1.05995774269104,
+                      -0.9295029044151306,
+                      1.802344799041748,
+                      0.9400423765182495,
+                      0.781915545463562,
+                      -1.197655200958252,
+                      -1.05995774269104,
+                      1.0704970359802246,
+                      -1.197655200958252,
+                      0.9400423765182495,
+                      -0.9228267669677734,
+                      -1.197655200958252,
+                      0.9378235936164856,
+                      -0.9295029044151306,
+                      -0.7638310790061951,
+                      0.8798965811729431,
+                      -1.4934794902801514,
+                      -1.68918776512146,
+                      1.0034561157226562,
+                      -1.3611276149749756,
+                      -0.7067047953605652,
+                      0.8722687363624573,
+                      -0.9978781342506409,
+                      -1.7547814846038818,
+                      1.0122146606445312,
+                      -0.9978781342506409,
+                      -1.688605785369873,
+                      1.5078160762786865,
+                      -1.4934794902801514,
+                      -1.6230120658874512,
+                      1.4990575313568115,
+                      -1.3611276149749756,
+                      -0.6405289769172668,
+                      1.3678700923919678,
+                      -0.8655263185501099,
+                      -0.7061226963996887,
+                      1.3766286373138428,
+                      -0.9228659868240356,
+                      -1.197655200958252,
+                      0.9400423765182495,
+                      -0.9295029044151306,
+                      -0.7558000683784485,
+                      0.9400423765182495,
+                      -0.8655263185501099,
+                      -0.7644184231758118,
+                      0.9400423765182495,
+                      1.0704970359802246,
+                      1.802344799041748,
+                      0.9400423765182495,
+                      -0.9295029044151306,
+                      1.802344799041748,
+                      -1.05995774269104,
+                      0.7245322465896606,
+                      -0.7640886306762695,
+                      -1.05995774269104,
+                      1.0704970359802246,
+                      1.802344799041748,
+                      -1.05995774269104,
+                      0.7804391384124756,
+                      -1.197655200958252,
+                      -0.9764140248298645,
+                      0.8568840622901917,
+                      -1.6989504098892212,
+                      -1.5477879047393799,
+                      0.8568840622901917,
+                      -1.765126347541809,
+                      -1.0521864891052246,
+                      1.3524854183197021,
+                      -1.6995326280593872,
+                      -1.0434279441833496,
+                      1.0704970359802246,
+                      -1.197655200958252,
+                      -0.9764140248298645,
+                      0.7245322465896606,
+                      -0.7164674401283264,
+                      -1.4166004657745361,
+                      1.3524854183197021,
+                      -1.6333566904067993,
+                      -1.5390293598175049,
+                      1.2201335430145264,
+                      -0.6508737206459045,
+                      -1.4078419208526611,
+                      1.2201335430145264,
+                      -0.7170495986938477,
+                      -0.9122405052185059,
+                      1.0704970359802246,
+                      -0.7368542551994324,
+                      -0.9148849248886108,
+                      1.0704970359802246,
+                      -0.7174832224845886,
+                      -1.05995774269104,
+                      0.9632022380828857,
+                      -0.7812621593475342,
+                      0.9400423765182495,
+                      0.8847388029098511,
+                      -0.7812620997428894,
+                      0.9400423765182495,
+                      0.8655263781547546,
+                      -0.6361004710197449,
+                      0.9400423765182495,
+                      1.0704970359802246,
+                      -0.7812621593475342,
+                      0.9400423765182495,
+                      1.0704970359802246,
+                      -0.6115150451660156,
+                      0.9173766374588013,
+                      1.0704970359802246,
+                      -0.6084885597229004,
+                      0.9400423765182495,
+                      0.9978781938552856,
+                      -1.6211262941360474,
+                      1.0521864891052246,
+                      0.8655263781547546,
+                      -0.5724673867225647,
+                      1.4166004657745361,
+                      0.9978781938552856,
+                      -1.554950475692749,
+                      1.5477879047393799,
+                      1.4934794902801514,
+                      -1.4893567562103271,
+                      1.5390293598175049,
+                      1.4934794902801514,
+                      -1.5555325746536255,
+                      1.0434279441833496,
+                      1.3611277341842651,
+                      -0.5730495452880859,
+                      0.9122405052185059,
+                      1.3611277341842651,
+                      -0.5068737268447876,
+                      1.4078419208526611
+                    ],
+                    "index": [
+                      0,
+                      1,
+                      2,
+                      0,
+                      3,
+                      4,
+                      0,
+                      5,
+                      3,
+                      0,
+                      4,
+                      1,
+                      3,
+                      6,
+                      4,
+                      0,
+                      2,
+                      5,
+                      2,
+                      7,
+                      5,
+                      3,
+                      5,
+                      8,
+                      3,
+                      8,
+                      6,
+                      5,
+                      9,
+                      8,
+                      2,
+                      1,
+                      7,
+                      6,
+                      10,
+                      4,
+                      5,
+                      7,
+                      9,
+                      9,
+                      7,
+                      11,
+                      6,
+                      8,
+                      12,
+                      1,
+                      4,
+                      7,
+                      4,
+                      13,
+                      7,
+                      4,
+                      10,
+                      13,
+                      13,
+                      11,
+                      7,
+                      6,
+                      14,
+                      10,
+                      9,
+                      11,
+                      15,
+                      9,
+                      16,
+                      8,
+                      8,
+                      17,
+                      12,
+                      6,
+                      12,
+                      18,
+                      19,
+                      20,
+                      21,
+                      19,
+                      22,
+                      23,
+                      19,
+                      21,
+                      22,
+                      19,
+                      24,
+                      20,
+                      19,
+                      23,
+                      24,
+                      23,
+                      25,
+                      24,
+                      21,
+                      12,
+                      17,
+                      21,
+                      17,
+                      26,
+                      21,
+                      26,
+                      22,
+                      21,
+                      20,
+                      12,
+                      23,
+                      22,
+                      25,
+                      22,
+                      26,
+                      25,
+                      6,
+                      18,
+                      14,
+                      20,
+                      24,
+                      27,
+                      12,
+                      20,
+                      18,
+                      20,
+                      27,
+                      18,
+                      26,
+                      28,
+                      25,
+                      27,
+                      25,
+                      28,
+                      24,
+                      25,
+                      27,
+                      8,
+                      16,
+                      17,
+                      17,
+                      16,
+                      26,
+                      26,
+                      29,
+                      28,
+                      13,
+                      10,
+                      30,
+                      13,
+                      30,
+                      11,
+                      10,
+                      14,
+                      30,
+                      11,
+                      30,
+                      31,
+                      30,
+                      14,
+                      32,
+                      18,
+                      27,
+                      14,
+                      27,
+                      28,
+                      29,
+                      27,
+                      29,
+                      14,
+                      9,
+                      15,
+                      33,
+                      11,
+                      31,
+                      15,
+                      9,
+                      33,
+                      16,
+                      34,
+                      35,
+                      15,
+                      34,
+                      36,
+                      35,
+                      35,
+                      33,
+                      15,
+                      35,
+                      36,
+                      33,
+                      33,
+                      36,
+                      37,
+                      34,
+                      15,
+                      31,
+                      34,
+                      31,
+                      38,
+                      34,
+                      38,
+                      39,
+                      39,
+                      38,
+                      40,
+                      34,
+                      39,
+                      36,
+                      39,
+                      40,
+                      36,
+                      36,
+                      41,
+                      37,
+                      36,
+                      40,
+                      41,
+                      33,
+                      37,
+                      16,
+                      37,
+                      42,
+                      16,
+                      38,
+                      31,
+                      43,
+                      38,
+                      43,
+                      40,
+                      40,
+                      43,
+                      41,
+                      37,
+                      41,
+                      42,
+                      43,
+                      42,
+                      41,
+                      42,
+                      32,
+                      16,
+                      26,
+                      16,
+                      44,
+                      26,
+                      44,
+                      45,
+                      26,
+                      45,
+                      46,
+                      26,
+                      46,
+                      29,
+                      16,
+                      47,
+                      44,
+                      16,
+                      32,
+                      47,
+                      30,
+                      32,
+                      31,
+                      31,
+                      32,
+                      43,
+                      43,
+                      32,
+                      42,
+                      14,
+                      29,
+                      32,
+                      32,
+                      48,
+                      47,
+                      32,
+                      49,
+                      48,
+                      29,
+                      46,
+                      49,
+                      32,
+                      29,
+                      49,
+                      50,
+                      51,
+                      45,
+                      50,
+                      45,
+                      44,
+                      50,
+                      52,
+                      51,
+                      50,
+                      53,
+                      52,
+                      50,
+                      54,
+                      53,
+                      50,
+                      44,
+                      54,
+                      54,
+                      44,
+                      47,
+                      54,
+                      47,
+                      55,
+                      52,
+                      53,
+                      56,
+                      54,
+                      55,
+                      53,
+                      51,
+                      46,
+                      45,
+                      51,
+                      49,
+                      46,
+                      51,
+                      55,
+                      49,
+                      52,
+                      56,
+                      51,
+                      55,
+                      47,
+                      48,
+                      55,
+                      48,
+                      49,
+                      51,
+                      56,
+                      55,
+                      53,
+                      55,
+                      56
+                    ]
+                  },
+                  "tooltip": "Serialized custom geometry (positions + index). Overrides primitive geometryType."
+                }
+              }
+            },
+            {
+              "id": "f31635ec-bcea-479b-964d-fc05e7914518",
+              "name": "Physics",
+              "tooltip": "Defines how this entity interacts with the physics simulation.",
+              "data": {
+                "enabled": {
+                  "type": "boolean",
+                  "defaultValue": true,
+                  "value": false,
+                  "tooltip": "Whether the physics simulation is enabled for this entity"
+                },
+                "anchored": {
+                  "type": "boolean",
+                  "defaultValue": false,
+                  "value": false,
+                  "tooltip": "Whether the entity is anchored in place and does not move"
+                },
+                "mass": {
+                  "type": "number",
+                  "defaultValue": 1,
+                  "value": 1,
+                  "tooltip": "Mass of the rigid body in kg"
+                },
+                "customCollider": {
+                  "type": "model",
+                  "defaultValue": "",
+                  "value": "",
+                  "tooltip": "Optional custom collider model ID"
+                }
+              }
+            }
+          ],
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "ab1d58f2-d2c9-4a00-9a29-a2ba1395dc2a",
+      "name": "Rocks",
+      "thumbnail": "data:image/png;base64,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",
+      "entities": [
+        {
+          "id": "0b023cfb-0b0e-4f3d-adee-2ea5f359df92",
+          "name": "Part 1",
+          "baseEntity": "part",
+          "tags": [],
+          "components": [
+            {
+              "id": "fb03331a-0005-47a1-ab17-7f3dfd3e2fb5",
+              "name": "Transform",
+              "tooltip": "Position, rotation, and scale of the entity in 3D space.",
+              "data": {
+                "position": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "tooltip": "Local position"
+                },
+                "rotation": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": -0.728,
+                    "y": -0.338,
+                    "z": -0.728
+                  },
+                  "tooltip": "Euler rotation in degrees"
+                },
+                "scale": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "value": {
+                    "x": 8,
+                    "y": 8,
+                    "z": 8
+                  },
+                  "tooltip": "Local scale"
+                }
+              }
+            },
+            {
+              "id": "f241cea8-aa4e-4161-b681-080fb60bf8fc",
+              "name": "Mesh",
+              "tooltip": "Defines the visible 3D geometry of this entity.",
+              "data": {
+                "geometryType": {
+                  "type": "string",
+                  "defaultValue": "box",
+                  "value": "box",
+                  "tooltip": "Shape: box, sphere, cylinder, or wedge"
+                },
+                "size": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "value": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "tooltip": "Dimensions of the mesh"
+                },
+                "color": {
+                  "type": "color",
+                  "defaultValue": 4500036,
+                  "value": "#bababa",
+                  "tooltip": "Base color of the mesh"
+                },
+                "customGeometry": {
+                  "type": "json",
+                  "defaultValue": null,
+                  "value": null,
+                  "tooltip": "Serialized custom geometry (positions + index). Overrides primitive geometryType."
+                }
+              }
+            },
+            {
+              "id": "5a88ac33-cc30-490f-9b71-eebed40ca6a6",
+              "name": "Physics",
+              "tooltip": "Defines how this entity interacts with the physics simulation.",
+              "data": {
+                "enabled": {
+                  "type": "boolean",
+                  "defaultValue": true,
+                  "value": true,
+                  "tooltip": "Whether the physics simulation is enabled for this entity"
+                },
+                "anchored": {
+                  "type": "boolean",
+                  "defaultValue": false,
+                  "value": true,
+                  "tooltip": "Whether the entity is anchored in place and does not move"
+                },
+                "mass": {
+                  "type": "number",
+                  "defaultValue": 1,
+                  "value": 1,
+                  "tooltip": "Mass of the rigid body in kg"
+                },
+                "customCollider": {
+                  "type": "model",
+                  "defaultValue": "",
+                  "value": "",
+                  "tooltip": "Optional custom collider model ID"
+                }
+              }
+            }
+          ],
+          "children": []
+        },
+        {
+          "id": "87656ac9-ff41-4340-90cf-95e1e56856bb",
+          "name": "Part 1 (Copy)",
+          "baseEntity": "part",
+          "tags": [],
+          "components": [
+            {
+              "id": "372b61ab-bdba-4b48-bcec-9b7a7fadc93b",
+              "name": "Transform",
+              "tooltip": "Position, rotation, and scale of the entity in 3D space.",
+              "data": {
+                "position": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": 24.432,
+                    "y": 3.375,
+                    "z": -26.807
+                  },
+                  "tooltip": "Local position"
+                },
+                "rotation": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": -0.728,
+                    "y": -0.338,
+                    "z": -0.728
+                  },
+                  "tooltip": "Euler rotation in degrees"
+                },
+                "scale": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "value": {
+                    "x": 8,
+                    "y": 8,
+                    "z": 8
+                  },
+                  "tooltip": "Local scale"
+                }
+              }
+            },
+            {
+              "id": "e0aeda77-43df-4c8b-a05c-4e17167e034d",
+              "name": "Mesh",
+              "tooltip": "Defines the visible 3D geometry of this entity.",
+              "data": {
+                "geometryType": {
+                  "type": "string",
+                  "defaultValue": "box",
+                  "value": "box",
+                  "tooltip": "Shape: box, sphere, cylinder, or wedge"
+                },
+                "size": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "value": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "tooltip": "Dimensions of the mesh"
+                },
+                "color": {
+                  "type": "color",
+                  "defaultValue": 4500036,
+                  "value": "#bababa",
+                  "tooltip": "Base color of the mesh"
+                },
+                "customGeometry": {
+                  "type": "json",
+                  "defaultValue": null,
+                  "value": null,
+                  "tooltip": "Serialized custom geometry (positions + index). Overrides primitive geometryType."
+                }
+              }
+            },
+            {
+              "id": "995fd415-8e03-4e0e-8f33-cc87203097a6",
+              "name": "Physics",
+              "tooltip": "Defines how this entity interacts with the physics simulation.",
+              "data": {
+                "enabled": {
+                  "type": "boolean",
+                  "defaultValue": true,
+                  "value": true,
+                  "tooltip": "Whether the physics simulation is enabled for this entity"
+                },
+                "anchored": {
+                  "type": "boolean",
+                  "defaultValue": false,
+                  "value": true,
+                  "tooltip": "Whether the entity is anchored in place and does not move"
+                },
+                "mass": {
+                  "type": "number",
+                  "defaultValue": 1,
+                  "value": 1,
+                  "tooltip": "Mass of the rigid body in kg"
+                },
+                "customCollider": {
+                  "type": "model",
+                  "defaultValue": "",
+                  "value": "",
+                  "tooltip": "Optional custom collider model ID"
+                }
+              }
+            }
+          ],
+          "children": []
+        },
+        {
+          "id": "0ee98d43-5239-493e-b098-cc1e07133f27",
+          "name": "Part 1 (Copy 2)",
+          "baseEntity": "part",
+          "tags": [],
+          "components": [
+            {
+              "id": "576cb6b1-56db-4fd2-8441-4c8ba97e2a3b",
+              "name": "Transform",
+              "tooltip": "Position, rotation, and scale of the entity in 3D space.",
+              "data": {
+                "position": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": -42.262,
+                    "y": -5.539,
+                    "z": 34.227
+                  },
+                  "tooltip": "Local position"
+                },
+                "rotation": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": -0.728,
+                    "y": -0.338,
+                    "z": -0.728
+                  },
+                  "tooltip": "Euler rotation in degrees"
+                },
+                "scale": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "value": {
+                    "x": 8,
+                    "y": 8,
+                    "z": 8
+                  },
+                  "tooltip": "Local scale"
+                }
+              }
+            },
+            {
+              "id": "6fd00c0e-f1a7-4127-ad3b-6a7619ede594",
+              "name": "Mesh",
+              "tooltip": "Defines the visible 3D geometry of this entity.",
+              "data": {
+                "geometryType": {
+                  "type": "string",
+                  "defaultValue": "box",
+                  "value": "box",
+                  "tooltip": "Shape: box, sphere, cylinder, or wedge"
+                },
+                "size": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "value": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "tooltip": "Dimensions of the mesh"
+                },
+                "color": {
+                  "type": "color",
+                  "defaultValue": 4500036,
+                  "value": "#bababa",
+                  "tooltip": "Base color of the mesh"
+                },
+                "customGeometry": {
+                  "type": "json",
+                  "defaultValue": null,
+                  "value": null,
+                  "tooltip": "Serialized custom geometry (positions + index). Overrides primitive geometryType."
+                }
+              }
+            },
+            {
+              "id": "b02f8598-3151-4712-8711-239fdf7aeb20",
+              "name": "Physics",
+              "tooltip": "Defines how this entity interacts with the physics simulation.",
+              "data": {
+                "enabled": {
+                  "type": "boolean",
+                  "defaultValue": true,
+                  "value": true,
+                  "tooltip": "Whether the physics simulation is enabled for this entity"
+                },
+                "anchored": {
+                  "type": "boolean",
+                  "defaultValue": false,
+                  "value": true,
+                  "tooltip": "Whether the entity is anchored in place and does not move"
+                },
+                "mass": {
+                  "type": "number",
+                  "defaultValue": 1,
+                  "value": 1,
+                  "tooltip": "Mass of the rigid body in kg"
+                },
+                "customCollider": {
+                  "type": "model",
+                  "defaultValue": "",
+                  "value": "",
+                  "tooltip": "Optional custom collider model ID"
+                }
+              }
+            }
+          ],
+          "children": []
+        },
+        {
+          "id": "cab4cbab-8118-4424-8b2b-0fde2d64fc92",
+          "name": "Part 1 (Copy 3)",
+          "baseEntity": "part",
+          "tags": [],
+          "components": [
+            {
+              "id": "514ee2c6-48e7-4354-84e6-d7c76e00b202",
+              "name": "Transform",
+              "tooltip": "Position, rotation, and scale of the entity in 3D space.",
+              "data": {
+                "position": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": 11.624,
+                    "y": -3.093,
+                    "z": 32.132
+                  },
+                  "tooltip": "Local position"
+                },
+                "rotation": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": -0.728,
+                    "y": -0.338,
+                    "z": -0.728
+                  },
+                  "tooltip": "Euler rotation in degrees"
+                },
+                "scale": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "value": {
+                    "x": 8,
+                    "y": 8,
+                    "z": 8
+                  },
+                  "tooltip": "Local scale"
+                }
+              }
+            },
+            {
+              "id": "b01d3c3e-9e91-4370-b6fd-56ec3aa9dd1b",
+              "name": "Mesh",
+              "tooltip": "Defines the visible 3D geometry of this entity.",
+              "data": {
+                "geometryType": {
+                  "type": "string",
+                  "defaultValue": "box",
+                  "value": "box",
+                  "tooltip": "Shape: box, sphere, cylinder, or wedge"
+                },
+                "size": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "value": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "tooltip": "Dimensions of the mesh"
+                },
+                "color": {
+                  "type": "color",
+                  "defaultValue": 4500036,
+                  "value": "#bababa",
+                  "tooltip": "Base color of the mesh"
+                },
+                "customGeometry": {
+                  "type": "json",
+                  "defaultValue": null,
+                  "value": null,
+                  "tooltip": "Serialized custom geometry (positions + index). Overrides primitive geometryType."
+                }
+              }
+            },
+            {
+              "id": "7257d0c2-3bef-4b07-a662-f27275b3e950",
+              "name": "Physics",
+              "tooltip": "Defines how this entity interacts with the physics simulation.",
+              "data": {
+                "enabled": {
+                  "type": "boolean",
+                  "defaultValue": true,
+                  "value": true,
+                  "tooltip": "Whether the physics simulation is enabled for this entity"
+                },
+                "anchored": {
+                  "type": "boolean",
+                  "defaultValue": false,
+                  "value": true,
+                  "tooltip": "Whether the entity is anchored in place and does not move"
+                },
+                "mass": {
+                  "type": "number",
+                  "defaultValue": 1,
+                  "value": 1,
+                  "tooltip": "Mass of the rigid body in kg"
+                },
+                "customCollider": {
+                  "type": "model",
+                  "defaultValue": "",
+                  "value": "",
+                  "tooltip": "Optional custom collider model ID"
+                }
+              }
+            }
+          ],
+          "children": []
+        },
+        {
+          "id": "a3f3b754-feeb-4c3f-b145-08fb5613f28c",
+          "name": "Part 1 (Copy 4)",
+          "baseEntity": "part",
+          "tags": [],
+          "components": [
+            {
+              "id": "23aa01af-6eec-4c62-a2cb-ada3dff8e4fa",
+              "name": "Transform",
+              "tooltip": "Position, rotation, and scale of the entity in 3D space.",
+              "data": {
+                "position": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": 27.888,
+                    "y": -12.388,
+                    "z": -1.672
+                  },
+                  "tooltip": "Local position"
+                },
+                "rotation": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": -0.728,
+                    "y": -0.338,
+                    "z": -0.728
+                  },
+                  "tooltip": "Euler rotation in degrees"
+                },
+                "scale": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "value": {
+                    "x": 15,
+                    "y": 8,
+                    "z": 20
+                  },
+                  "tooltip": "Local scale"
+                }
+              }
+            },
+            {
+              "id": "9cc20fa1-81a9-4d58-8b20-5ce1e1c49f03",
+              "name": "Mesh",
+              "tooltip": "Defines the visible 3D geometry of this entity.",
+              "data": {
+                "geometryType": {
+                  "type": "string",
+                  "defaultValue": "box",
+                  "value": "box",
+                  "tooltip": "Shape: box, sphere, cylinder, or wedge"
+                },
+                "size": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "value": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "tooltip": "Dimensions of the mesh"
+                },
+                "color": {
+                  "type": "color",
+                  "defaultValue": 4500036,
+                  "value": "#bababa",
+                  "tooltip": "Base color of the mesh"
+                },
+                "customGeometry": {
+                  "type": "json",
+                  "defaultValue": null,
+                  "value": null,
+                  "tooltip": "Serialized custom geometry (positions + index). Overrides primitive geometryType."
+                }
+              }
+            },
+            {
+              "id": "4ebdd457-33de-4dcf-8815-25dfdb671cf5",
+              "name": "Physics",
+              "tooltip": "Defines how this entity interacts with the physics simulation.",
+              "data": {
+                "enabled": {
+                  "type": "boolean",
+                  "defaultValue": true,
+                  "value": true,
+                  "tooltip": "Whether the physics simulation is enabled for this entity"
+                },
+                "anchored": {
+                  "type": "boolean",
+                  "defaultValue": false,
+                  "value": true,
+                  "tooltip": "Whether the entity is anchored in place and does not move"
+                },
+                "mass": {
+                  "type": "number",
+                  "defaultValue": 1,
+                  "value": 1,
+                  "tooltip": "Mass of the rigid body in kg"
+                },
+                "customCollider": {
+                  "type": "model",
+                  "defaultValue": "",
+                  "value": "",
+                  "tooltip": "Optional custom collider model ID"
+                }
+              }
+            }
+          ],
+          "children": []
+        },
+        {
+          "id": "43c52dfc-172f-4075-aee0-c94a33b362d4",
+          "name": "Part 1 (Copy 5)",
+          "baseEntity": "part",
+          "tags": [],
+          "components": [
+            {
+              "id": "f6aab192-ded3-4513-9324-2baca940263f",
+              "name": "Transform",
+              "tooltip": "Position, rotation, and scale of the entity in 3D space.",
+              "data": {
+                "position": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": -24.37,
+                    "y": -11.505,
+                    "z": 31.641
+                  },
+                  "tooltip": "Local position"
+                },
+                "rotation": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "value": {
+                    "x": -2.185,
+                    "y": 0.164,
+                    "z": -1.04
+                  },
+                  "tooltip": "Euler rotation in degrees"
+                },
+                "scale": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "value": {
+                    "x": 15,
+                    "y": 8,
+                    "z": 20
+                  },
+                  "tooltip": "Local scale"
+                }
+              }
+            },
+            {
+              "id": "1a8e8930-6e01-46d9-a652-009c5750e628",
+              "name": "Mesh",
+              "tooltip": "Defines the visible 3D geometry of this entity.",
+              "data": {
+                "geometryType": {
+                  "type": "string",
+                  "defaultValue": "box",
+                  "value": "box",
+                  "tooltip": "Shape: box, sphere, cylinder, or wedge"
+                },
+                "size": {
+                  "type": "vector3",
+                  "defaultValue": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "value": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "tooltip": "Dimensions of the mesh"
+                },
+                "color": {
+                  "type": "color",
+                  "defaultValue": 4500036,
+                  "value": "#bababa",
+                  "tooltip": "Base color of the mesh"
+                },
+                "customGeometry": {
+                  "type": "json",
+                  "defaultValue": null,
+                  "value": null,
+                  "tooltip": "Serialized custom geometry (positions + index). Overrides primitive geometryType."
+                }
+              }
+            },
+            {
+              "id": "ea99eb5c-5fa7-4611-8ede-370cfc9feb55",
+              "name": "Physics",
+              "tooltip": "Defines how this entity interacts with the physics simulation.",
+              "data": {
+                "enabled": {
+                  "type": "boolean",
+                  "defaultValue": true,
+                  "value": true,
+                  "tooltip": "Whether the physics simulation is enabled for this entity"
+                },
+                "anchored": {
+                  "type": "boolean",
+                  "defaultValue": false,
+                  "value": true,
+                  "tooltip": "Whether the entity is anchored in place and does not move"
+                },
+                "mass": {
+                  "type": "number",
+                  "defaultValue": 1,
+                  "value": 1,
+                  "tooltip": "Mass of the rigid body in kg"
+                },
+                "customCollider": {
+                  "type": "model",
+                  "defaultValue": "",
+                  "value": "",
+                  "tooltip": "Optional custom collider model ID"
+                }
+              }
+            }
+          ],
+          "children": []
+        }
+      ]
+    }
+  ],
   "scripts": [
     {
-      "id": "script-lander",
-      "name": "LanderFlightComputer",
-      "stateData": {},
+      "id": "5489cbc2-808a-4191-bfa6-b7e0ded95aef",
+      "name": "GameLogic",
+      "stateData": {
+        "nodes": [
+          {
+            "id": "start",
+            "type": "terminal",
+            "position": {
+              "x": 150,
+              "y": 0
+            },
+            "data": {
+              "kind": "start"
+            }
+          },
+          {
+            "id": "end",
+            "type": "terminal",
+            "position": {
+              "x": 150,
+              "y": 300
+            },
+            "data": {
+              "kind": "end"
+            }
+          },
+          {
+            "id": "node-0c533fda",
+            "type": "stateMachine",
+            "position": {
+              "x": 168.8391497377334,
+              "y": 84.96323648363416
+            },
+            "data": {
+              "text": "",
+              "script": "script"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "xy-edge__start-node-0c533fda",
+            "source": "start",
+            "target": "node-0c533fda"
+          }
+        ]
+      },
       "scriptData": [
         {
-          "code": "-- Lunar Lander Flight Computer\nlocal fuel = 100\nlocal landed = false\nlocal crashed = false\nlocal lastY = (Transform and Transform.position and Transform.position.y) or 16.5\n\nGlobal.fuel = fuel\nGlobal.status = \"IN_FLIGHT\"\n\nwhile true do\n    wait(0.03)\n\n    local dt = Time.dt\n    if not dt or dt <= 0 then dt = 0.03 end\n\n    local currentY = Transform.position.y\n    local vSpeed = (lastY - currentY) / dt\n    lastY = currentY\n\n    local altitude = math.max(0, currentY - 1.0)\n    Global.altitude = altitude\n    Global.vSpeed = vSpeed\n\n    -- Update Telemetry UI\n    UI.setText(\"HUD_Alt\", string.format(\"📏 ALT: %.1f m\", altitude))\n    UI.setText(\"HUD_Speed\", string.format(\"⚡ V-SPD: %.1f m/s\", math.abs(vSpeed)))\n    UI.setText(\"HUD_Fuel\", string.format(\"⛽ FUEL: %d%%\", math.floor(fuel)))\n\n    -- Speed warning coloring\n    if vSpeed > 3.0 then\n        UI.setColor(\"HUD_Speed\", \"#ef4444\")\n    else\n        UI.setColor(\"HUD_Speed\", \"#22c55e\")\n    end\n\n    if not landed and not crashed then\n        -- 1. Main Thruster (W, Space, or Up Arrow)\n        if (Input.isKeyDown(\"Space\") or Input.isKeyDown(\"KeyW\") or Input.isKeyDown(\"ArrowUp\")) and fuel > 0 then\n            fuel = math.max(0, fuel - 0.35)\n            Physics:applyImpulse(0, 0.44, 0)\n        end\n\n        -- 2. Lateral RCS Thrusters (A / D)\n        if (Input.isKeyDown(\"KeyA\") or Input.isKeyDown(\"ArrowLeft\")) and fuel > 0 then\n            fuel = math.max(0, fuel - 0.15)\n            Physics:applyImpulse(-0.16, 0, 0)\n        end\n        if (Input.isKeyDown(\"KeyD\") or Input.isKeyDown(\"ArrowRight\")) and fuel > 0 then\n            fuel = math.max(0, fuel - 0.15)\n            Physics:applyImpulse(0.16, 0, 0)\n        end\n\n        -- Stabilize pitch & roll\n        Transform.rotation.x = 0\n        Transform.rotation.z = 0\n\n        -- 3. Touchdown Check\n        if altitude <= 0.25 then\n            local posX = Transform.position.x\n            local posZ = Transform.position.z\n            local distFromPad = math.sqrt(posX * posX + posZ * posZ)\n\n            if distFromPad <= 4.2 and vSpeed <= 3.2 then\n                landed = true\n                Global.status = \"LANDED\"\n                UI.setText(\"HUD_Status\", \"🎉 TOUCHDOWN! THE EAGLE HAS LANDED!\")\n                UI.setBackgroundColor(\"HUD_Status\", \"rgba(34, 197, 94, 0.95)\")\n                Physics:setVelocity(0, 0, 0)\n            else\n                crashed = true\n                Global.status = \"CRASHED\"\n                if distFromPad > 4.2 then\n                    UI.setText(\"HUD_Status\", \"💥 MISSED THE PAD! CRASHED ON ROCKS!\")\n                else\n                    UI.setText(\"HUD_Status\", \"💥 HARD IMPACT! DESCENT TOO FAST!\")\n                end\n                UI.setBackgroundColor(\"HUD_Status\", \"rgba(239, 68, 68, 0.95)\")\n            end\n        end\n    end\nend\n"
+          "code": "-- TinyStudio Lunar Lander Flight & Touchdown Controller\nprint(\"Lunar Lander Initialized!\")\n\nlocal lander = getEntityByName(\"CSG Result\")\nlocal StatusUI = getEntityByName(\"UIText 4\")\n\n-- Flight Settings\nlocal THRUST_POWER = 500      -- Main rocket thrust power (Space)\nlocal TILT_SPEED = 2.0         -- Tilt speed in rad/sec (WASD)\nlocal MAX_TILT = math.rad(45)  -- Max tilt angle (45 degrees)\nlocal MAX_SAFE_SPEED = 1.0     -- Max vertical impact speed for safe landing\n\nlocal hasTouched = false\nlocal landed = false\nlocal crashed = false\nlocal lastY = Transform.position.y\nlocal impactSpeed = 0\n\n-- 1. Contact / Touchdown Listener on Player's Physics\nPhysics:on(\"touched\", function(other)\n    if not hasTouched and not landed and not crashed then\n        hasTouched = true\n        print(string.format(\"Touchdown contact! V-Speed: %.2f\", impactSpeed))\n    end\nend)\n\nwhile true do\n    local dt = 0.02\n\n    -- 2. Sync the cosmetic visual costume to the player hitbox\n    if lander and lander.Transform then\n        lander.Transform.position = Transform.position + Vector3.new(0, 1, 0)\n        lander.Transform.rotation = Transform.rotation\n    end\n\n    -- 3. Calculate vertical descent speed\n    local currentY = Transform.position.y\n    local vSpeed = math.abs((currentY - lastY) / dt)\n    impactSpeed = vSpeed\n    lastY = currentY\n\n    UI.setText(\"UIText 3\", string.format(\"ALT: %.1f m\", currentY))\n    UI.setText(\"UIText 5\", string.format(\"V-SPD: %.1f m/s\", math.abs(vSpeed)))\n\n    if not landed and not crashed then\n        -- 4. WASD Attitude / Tilt Controls\n        -- W/S = Pitch (tilt forward / back)\n        if Input.isKeyDown(\"KeyW\") or Input.isKeyDown(\"ArrowUp\") then\n            Transform.rotation.x = math.min(MAX_TILT, Transform.rotation.x + TILT_SPEED * dt)\n        elseif Input.isKeyDown(\"KeyS\") or Input.isKeyDown(\"ArrowDown\") then\n            Transform.rotation.x = math.max(-MAX_TILT, Transform.rotation.x - TILT_SPEED * dt)\n        end\n\n        -- 5. Space: Main Thruster (pushes along the craft's tilted up-axis)\n        if Input.isKeyDown(\"Space\") then\n            local up = Transform.rotation:getUpVector()\n            local thrust = up * THRUST_POWER\n            Physics:applyImpulse(thrust.x, thrust.y, -thrust.z)\n        end\n\n        -- 6. Touchdown Settlement & Stability Check\n        if hasTouched then\n            -- Wait a few frames for physics to stabilize on the ground\n            wait(0.35)\n\n            -- Evaluate speed at contact\n            if impactSpeed > MAX_SAFE_SPEED then\n                crashed = true\n                UI.setText(\"UIText 4\", \"Crashed! Too fast.\")\n                UI.setVisible(\"UIText 4\", true)\n            else\n                -- Check if upright: UpVector.y will be close to 1.0 if standing on landing gear\n                local finalUp = Transform.rotation:getUpVector()\n                if finalUp.y >= 0.75 then\n                    landed = true\n                    UI.setText(\"UIText 4\", \"Landed!\")\n                    UI.setVisible(\"UIText 4\", true)\n                else\n                    crashed = true\n                    UI.setText(\"UIText 4\", \"Crashed! Didn't land.\")\n                    UI.setVisible(\"UIText 4\", true)\n                end\n            end\n        end\n    end\n\n    wait(dt)\nend\n",
+          "name": "script"
         }
       ]
     }

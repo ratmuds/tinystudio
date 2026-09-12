@@ -98,12 +98,21 @@ export class EntityModule implements ScriptModule {
             local LiveVector3_mt = {
                 __index = function(t, k)
                     if Vector3[k] then return Vector3[k] end
-                    local val = rawget(t, "_e").value
-                    return val and val[k] or nil
+                    local entry = rawget(t, "_e")
+                    local val = entry and entry.value
+                    if not val then return nil end
+                    local lk = string.lower(tostring(k))
+                    if lk == "x" or lk == "y" or lk == "z" then
+                        return val[lk] or val[k]
+                    end
+                    return nil
                 end,
                 __newindex = function(t, k, val)
                     local entry = rawget(t, "_e")
-                    if k == "x" or k == "y" or k == "z" then
+                    if not entry or not entry.value then return end
+                    local lk = string.lower(tostring(k))
+                    if lk == "x" or lk == "y" or lk == "z" then
+                        entry.value[lk] = val
                         entry.value[k] = val
                         entry.dirty = true
                     else
@@ -130,7 +139,8 @@ export class EntityModule implements ScriptModule {
                 if method then return method end
 
                 local comp = rawget(self, "_component")
-                local entry = comp.data[key]
+                if not comp or not comp.data then return nil end
+                local entry = comp.data[key] or comp.data[string.lower(tostring(key))]
                 if not entry then return nil end
 
                 if entry.type == "vector3" then
@@ -141,7 +151,11 @@ export class EntityModule implements ScriptModule {
 
             Component.__newindex = function(self, key, value)
                 local comp = rawget(self, "_component")
-                local entry = comp.data[key]
+                if not comp or not comp.data then
+                    rawset(self, key, value)
+                    return
+                end
+                local entry = comp.data[key] or comp.data[string.lower(tostring(key))]
                 if not entry then
                     rawset(self, key, value)
                     return
@@ -149,9 +163,9 @@ export class EntityModule implements ScriptModule {
 
                 if entry.type == "vector3" then
                     if value then
-                        entry.value.x = value.x or 0
-                        entry.value.y = value.y or 0
-                        entry.value.z = value.z or 0
+                        entry.value.x = value.x or value.X or 0
+                        entry.value.y = value.y or value.Y or 0
+                        entry.value.z = value.z or value.Z or 0
                         entry.dirty = true
                     end
                 else
@@ -200,10 +214,24 @@ export class EntityModule implements ScriptModule {
 
             function Entity:_findComponent(name)
                 if not self._components then return nil end
+                local target = string.lower(tostring(name))
                 local len = self._components.length or #self._components
+                -- Check 0-based index first (standard for JavaScript arrays bridged through Wasmoon)
+                local c0 = self._components[0]
+                if c0 and c0.name and string.lower(c0.name) == target then
+                    return c0
+                end
+                -- Check 1-based indices
                 for i = 1, len do
                     local comp = self._components[i]
-                    if comp and comp.name == name then
+                    if comp and comp.name and string.lower(comp.name) == target then
+                        return comp
+                    end
+                end
+                -- Fallback loop from 0 to len
+                for i = 0, len do
+                    local comp = self._components[i]
+                    if comp and comp.name and string.lower(comp.name) == target then
                         return comp
                     end
                 end
@@ -223,7 +251,7 @@ export class EntityModule implements ScriptModule {
                     return cache[key]
                 end
 
-                local component = self:_findComponent(key:gsub("^%l", string.upper))
+                local component = self:_findComponent(key)
                 if component then
                     local wrapped = setmetatable(
                         { _component = component, _entity = self },
@@ -232,11 +260,48 @@ export class EntityModule implements ScriptModule {
                     cache[key] = wrapped
                     return wrapped
                 end
+
+                -- Direct convenience shortcuts for Transform: position, rotation, scale
+                local lk = string.lower(tostring(key))
+                if lk == "position" or lk == "rotation" or lk == "scale" then
+                    local transform = self:_findComponent("Transform")
+                    if transform then
+                        local wrapped = setmetatable(
+                            { _component = transform, _entity = self },
+                            Component
+                        )
+                        return wrapped[lk]
+                    end
+                end
+
                 return nil
             end
 
             Entity.__newindex = function(self, key, value)
+                local lk = string.lower(tostring(key))
+                if lk == "position" or lk == "rotation" or lk == "scale" then
+                    local transform = self:_findComponent("Transform")
+                    if transform then
+                        local wrapped = setmetatable(
+                            { _component = transform, _entity = self },
+                            Component
+                        )
+                        wrapped[lk] = value
+                        return
+                    end
+                end
                 rawset(self, key, value)
+            end
+
+            function Entity:getComponent(name)
+                local comp = self:_findComponent(name)
+                if comp then
+                    return setmetatable(
+                        { _component = comp, _entity = self },
+                        Component
+                    )
+                end
+                return nil
             end
 
             function Entity:on(eventName, callback)
@@ -296,9 +361,12 @@ export class EntityModule implements ScriptModule {
                 local list = {}
                 if ids then
                     local len = ids.length or #ids
-                    for i = 1, len do
-                        local wrapped = getEntityById(ids[i])
-                        if wrapped then table.insert(list, wrapped) end
+                    for i = 0, len do
+                        local id = ids[i]
+                        if id then
+                            local wrapped = getEntityById(id)
+                            if wrapped then table.insert(list, wrapped) end
+                        end
                     end
                 end
                 return list
@@ -314,9 +382,12 @@ export class EntityModule implements ScriptModule {
                 local list = {}
                 if ids then
                     local len = ids.length or #ids
-                    for i = 1, len do
-                        local wrapped = getEntityById(ids[i])
-                        if wrapped then table.insert(list, wrapped) end
+                    for i = 0, len do
+                        local id = ids[i]
+                        if id then
+                            local wrapped = getEntityById(id)
+                            if wrapped then table.insert(list, wrapped) end
+                        end
                     end
                 end
                 return list

@@ -1,7 +1,8 @@
 <script lang="ts">
     import * as Dialog from "$lib/components/ui/dialog/index.js";
     import {
-        Sparkles,
+        Plus,
+        Rocket,
         FolderOpen,
         Download,
         Gamepad2,
@@ -42,33 +43,7 @@
     let saveSuccess = $state(false);
 
     let demoProjects = $state<DemoProjectInfo[]>([
-        {
-            id: "lunar-lander",
-            name: "Lunar Lander",
-            description:
-                "Retro physics space lander. Fire main thrusters with Space / W, control lateral RCS with A / D, manage fuel, and touchdown gently on the pad!",
-            filename: "lunar_lander.json",
-            icon: "sparkles",
-            tags: ["Space", "Physics", "Global State", "Lander"],
-        },
-        {
-            id: "platformer-playground",
-            name: "Platformer Playground",
-            description:
-                "Third-person character obstacle course with jumping platforms, spinning hazards, and follow camera.",
-            filename: "platformer_playground.json",
-            icon: "gamepad",
-            tags: ["Player", "Platforms", "Camera Follow"],
-        },
-        {
-            id: "physics-sandbox",
-            name: "Physics Sandbox",
-            description:
-                "Interactive rigid-body physics arena with tumble block towers, dominoes, and shockwaves.",
-            filename: "physics_sandbox.json",
-            icon: "boxes",
-            tags: ["Jolt Physics", "Collisions", "Destruction"],
-        },
+
     ]);
 
     onMount(async () => {
@@ -190,7 +165,7 @@
                 <div
                     class="flex h-14 w-14 items-center justify-center rounded-2xl bg-green-500/10 text-green-500 transition-all duration-200 group-hover:scale-110 group-hover:bg-green-500 group-hover:text-white"
                 >
-                    <Sparkles class="h-7 w-7" />
+                    <Plus class="h-7 w-7" />
                 </div>
                 <h3 class="mt-3.5 text-base font-bold text-foreground">
                     New Project
@@ -277,7 +252,7 @@
                                 {:else if demo.icon === "boxes"}
                                     <Boxes class="h-5 w-5" />
                                 {:else}
-                                    <Sparkles class="h-5 w-5" />
+                                    <Rocket class="h-5 w-5" />
                                 {/if}
                             </div>
                             <h4

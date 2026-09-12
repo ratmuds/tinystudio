@@ -32,6 +32,7 @@
         SquaresSubtract,
         Paintbrush,
         FileCode2,
+        X
     } from "@lucide/svelte";
 
     import {
@@ -39,7 +40,7 @@
         ModelWorkspaceData,
         GameData,
     } from "$lib/stores/data.svelte";
-    import { createPartEntity, type Entity } from "$lib/stores/ecs.svelte";
+    import { createPartEntity, cloneEntity, type Entity } from "$lib/stores/ecs.svelte";
     import * as ECS from "$lib/stores/ecs.svelte";
     import { onMount } from "svelte";
     import { generateObjectPreview } from "$lib/threeThumbnailGen";
@@ -280,6 +281,69 @@
         addComponentModalOpen = false;
     }
 
+    function duplicateEntity(
+        entityId: string,
+        updateSelection = true,
+    ): Entity | null {
+        const source = modelData.entities.find((e) => e.id === entityId);
+        if (!source) return null;
+
+        const newEntity = cloneEntity(source);
+
+        // Offset position slightly so it doesn't overlap identically
+        const transform = newEntity.components.find(
+            (c) => c.name === "Transform",
+        );
+        if (transform && transform.data?.position?.value) {
+            const p = transform.data.position.value as {
+                x: number;
+                y: number;
+                z: number;
+            };
+            transform.data.position.value = {
+                x: +(p.x + 0.5).toFixed(2),
+                y: +p.y.toFixed(2),
+                z: +(p.z + 0.5).toFixed(2),
+            };
+        }
+
+        // Insert after the source entity in modelData.entities
+        const idx = modelData.entities.findIndex((e) => e.id === entityId);
+        if (idx !== -1) {
+            modelData.entities.splice(idx + 1, 0, newEntity);
+        } else {
+            modelData.entities.push(newEntity);
+        }
+
+        // Spawn mesh immediately if it has a Mesh component
+        if (newEntity.components.some((c) => c.name === "Mesh")) {
+            createMeshForEntity(newEntity);
+        }
+
+        if (updateSelection) {
+            selectedPartIds = [newEntity.id];
+            selectedFaces = [];
+        }
+
+        return newEntity;
+    }
+
+    function duplicateSelectedEntities() {
+        if (selectedPartIds.length === 0) return;
+        const toDuplicate = [...selectedPartIds];
+        const newIds: string[] = [];
+        for (const id of toDuplicate) {
+            const cloned = duplicateEntity(id, false);
+            if (cloned) {
+                newIds.push(cloned.id);
+            }
+        }
+        if (newIds.length > 0) {
+            selectedPartIds = newIds;
+            selectedFaces = [];
+        }
+    }
+
     function deleteEntity(entityId: string) {
         const idx = modelData.entities.findIndex((e) => e.id === entityId);
         if (idx !== -1) {
@@ -287,6 +351,14 @@
         }
         const mesh = meshByEntityId.get(entityId);
         if (mesh) {
+            if (
+                rendererTransformControls &&
+                (rendererTransformControls.object === mesh ||
+                    rendererTransformControls.object?.userData?.entityId === entityId ||
+                    rendererTransformControls.object?.userData?.partId === entityId)
+            ) {
+                rendererTransformControls.detach();
+            }
             scene.remove(mesh);
             mesh.geometry.dispose();
             const mat = mesh.material;
@@ -299,11 +371,26 @@
         }
         const helper = cameraHelpers.get(entityId);
         if (helper) {
+            if (
+                rendererTransformControls &&
+                (rendererTransformControls.object === helper.group ||
+                    rendererTransformControls.object?.userData?.entityId === entityId)
+            ) {
+                rendererTransformControls.detach();
+            }
             disposeCameraHelper(helper, scene);
             cameraHelpers.delete(entityId);
         }
         selectedPartIds = selectedPartIds.filter((id) => id !== entityId);
         selectedFaces = selectedFaces.filter((f) => f.entityId !== entityId);
+    }
+
+    function deleteSelectedEntities() {
+        if (selectedPartIds.length === 0) return;
+        const toDelete = [...selectedPartIds];
+        for (const id of toDelete) {
+            deleteEntity(id);
+        }
     }
 
     //  CSG (constructive solid geometry) 
@@ -380,8 +467,28 @@
 
     function handleKeydown(e: KeyboardEvent) {
         // Don't trigger shortcuts when typing in inputs
-        const tag = (e.target as HTMLElement)?.tagName;
-        if (tag === "INPUT" || tag === "TEXTAREA") return;
+        const target = e.target as HTMLElement | null;
+        const tag = target?.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable) return;
+
+        // Duplicate shortcut: Ctrl+D, Cmd+D, or Shift+D
+        if (
+            ((e.metaKey || e.ctrlKey) && (e.key === "d" || e.key === "D")) ||
+            (e.shiftKey && (e.key === "d" || e.key === "D") && !e.metaKey && !e.ctrlKey)
+        ) {
+            e.preventDefault();
+            duplicateSelectedEntities();
+            return;
+        }
+
+        // Delete shortcut: Delete or Backspace
+        if (e.key === "Delete" || e.key === "Backspace") {
+            if (selectedPartIds.length > 0) {
+                e.preventDefault();
+                deleteSelectedEntities();
+                return;
+            }
+        }
 
         if ((e.key === "a" || e.key === "A") && (e.metaKey || e.ctrlKey || e.shiftKey)) {
             e.preventDefault();
@@ -595,6 +702,31 @@
         }
     });
 
+    function getPartFromId(id: string) {
+        for (const entity of modelData.entities) {
+            if (entity.id === id) {
+                return entity;
+            }
+        }
+        return null;
+    }
+
+    let tag = $state("");
+
+    function addTag(tag: string) {
+        const part = getPartFromId(selectedPartIds[0]);
+        if (!part) return;
+        if (!part.tags) part.tags = [];
+        if (!part.tags.includes(tag)) part.tags.push(tag);
+    }
+
+    function removeTag(tag: string) {
+        const part = getPartFromId(selectedPartIds[0]);
+        if (!part) return;
+        if (!part.tags) return;
+        part.tags = part.tags.filter((t) => t !== tag);
+    }
+
     function getSelectedPartComponents() {
         let compTypes = new Map<string, number>(); // component name → count
 
@@ -729,16 +861,30 @@
                         <Boxes class="h-3.5 w-3.5 shrink-0 text-green-500" />
                     {/if}
                     <span class="flex-1 truncate">{entity.name}</span>
-                    <button
-                        class="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 duration-100 group-hover:opacity-100 hover:bg-destructive/15 hover:text-destructive"
-                        onclick={(e) => {
-                            e.stopPropagation();
-                            deleteEntity(entity.id);
-                        }}
-                        aria-label="Delete entity"
-                    >
-                        <Trash2 class="h-3 w-3" />
-                    </button>
+                    <div class="flex items-center gap-0.5 opacity-0 duration-100 group-hover:opacity-100">
+                        <button
+                            class="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted/80 hover:text-foreground active:scale-95"
+                            onclick={(e) => {
+                                e.stopPropagation();
+                                duplicateEntity(entity.id);
+                            }}
+                            aria-label="Duplicate entity"
+                            title="Duplicate (Ctrl+D)"
+                        >
+                            <Copy class="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                            class="shrink-0 rounded p-1 text-muted-foreground hover:bg-destructive/15 hover:text-destructive active:scale-95"
+                            onclick={(e) => {
+                                e.stopPropagation();
+                                deleteEntity(entity.id);
+                            }}
+                            aria-label="Delete entity"
+                            title="Delete (Del)"
+                        >
+                            <Trash2 class="h-3.5 w-3.5" />
+                        </button>
+                    </div>
                 </div>
             {/each}
 
@@ -993,6 +1139,44 @@
                         </Tooltip.Root>
                     </Tooltip.Provider>
                 </div>
+
+                <div class="flex items-center gap-1 rounded-lg bg-muted p-1">
+                    <Tooltip.Provider>
+                        <Tooltip.Root>
+                            <Tooltip.Trigger
+                                onclick={duplicateSelectedEntities}
+                                disabled={selectedPartIds.length === 0}
+                                class="rounded-md px-3 py-3 text-sm font-bold tracking-wide shadow-sm duration-150 hover:bg-background/50 hover:text-green-500 disabled:pointer-events-none disabled:opacity-40"
+                                aria-label="Duplicate selected entity"
+                            >
+                                <Copy class="h-4 w-4" />
+                            </Tooltip.Trigger>
+                            <Tooltip.Content>
+                                <p>
+                                    Duplicate <Kbd.Root class="ml-1 font-bold">Ctrl+D</Kbd.Root>
+                                </p>
+                            </Tooltip.Content>
+                        </Tooltip.Root>
+                    </Tooltip.Provider>
+
+                    <Tooltip.Provider>
+                        <Tooltip.Root>
+                            <Tooltip.Trigger
+                                onclick={deleteSelectedEntities}
+                                disabled={selectedPartIds.length === 0}
+                                class="rounded-md px-3 py-3 text-sm font-bold tracking-wide shadow-sm duration-150 hover:bg-destructive/15 hover:text-destructive disabled:pointer-events-none disabled:opacity-40"
+                                aria-label="Delete selected entity"
+                            >
+                                <Trash2 class="h-4 w-4" />
+                            </Tooltip.Trigger>
+                            <Tooltip.Content>
+                                <p>
+                                    Delete <Kbd.Root class="ml-1 font-bold">Del</Kbd.Root>
+                                </p>
+                            </Tooltip.Content>
+                        </Tooltip.Root>
+                    </Tooltip.Provider>
+                </div>
             </div>
 
             <div
@@ -1067,12 +1251,49 @@
             </p>
 
             {#if selectedPartIds.length > 0}
-                <p
-                    class="mb-2 rounded-md bg-muted/60 px-3 py-1.5 text-xs text-green-400"
-                >
-                    {selectedPartIds.length} part(s) selected{#if selectedFaces.length > 0}
-                        · {selectedFaces.length} face(s){/if}
-                </p>
+                <div class="mb-3 flex items-center justify-between gap-2">
+                    <span
+                        class="rounded-md bg-muted/60 px-2.5 py-1 text-xs font-medium text-green-400"
+                    >
+                        {selectedPartIds.length} part(s) selected{#if selectedFaces.length > 0}
+                            · {selectedFaces.length} face(s){/if}
+                    </span>
+                    <div class="flex items-center gap-1.5">
+                        <button
+                            onclick={duplicateSelectedEntities}
+                            class="flex items-center gap-1 rounded-md border border-border/60 bg-muted/50 px-2 py-1 text-xs font-medium text-foreground duration-150 hover:bg-muted hover:text-green-400 active:scale-95"
+                            title="Duplicate (Ctrl+D)"
+                        >
+                            <Copy class="h-3 w-3" />
+                            <span>Duplicate</span>
+                        </button>
+                        <button
+                            onclick={deleteSelectedEntities}
+                            class="flex items-center gap-1 rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1 text-xs font-medium text-destructive duration-150 hover:bg-destructive/20 active:scale-95"
+                            title="Delete (Del)"
+                        >
+                            <Trash2 class="h-3 w-3" />
+                            <span>Delete</span>
+                        </button>
+                    </div>
+                </div>
+            {/if}
+
+            <!-- Tag editor -->
+            {#if selectedPartIds.length === 1}
+                <div class="my-2 flex items-center gap-2">
+                    <input class="w-full rounded-md border-2 border-border/60 bg-background px-3 py-2 text-sm duration-150 outline-none focus:border-green-700" bind:value={tag} type="text" placeholder="Add tag" />
+                    <button class="h-10 rounded-md border border-border/60 bg-muted/50 px-2 py-1 text-xs font-medium text-foreground duration-150 hover:bg-muted hover:text-green-400 active:scale-95" onclick={() => addTag(tag)}><Plus class="h-4 w-4" /></button>
+                </div>
+
+                {#each getPartFromId(selectedPartIds[0])?.tags as tag}
+                    <span class="inline-flex items-center rounded-full bg-green-500/10 px-2.5 py-0.5 text-xs font-medium text-green-400 backdrop-blur-md border border-green-500/20">
+                        {tag}
+                        <button onclick={() => removeTag(tag)} class="ml-1 text-green-400 hover:text-green-300">
+                            <X class="h-3 w-3" />
+                        </button>
+                    </span>
+                {/each}
             {/if}
 
             {#if selectedPartIds.length === 0}

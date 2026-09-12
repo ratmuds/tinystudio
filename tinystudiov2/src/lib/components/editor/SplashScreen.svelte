@@ -7,7 +7,7 @@
     let loaded = $state(false);
 
     onMount(() => {
-        const timer = setTimeout(() => (loaded = true), 0);
+        const timer = setTimeout(() => (loaded = true), 3000);
         return () => clearTimeout(timer);
     });
 </script>

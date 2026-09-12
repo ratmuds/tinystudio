@@ -177,102 +177,6 @@
                 </Tooltip.Content>
             </Tooltip.Root>
         </Tooltip.Provider>
-
-        <Dialog.Root>
-            <Dialog.Trigger
-                class="flex items-center gap-1.5 rounded-md p-2 text-sm text-muted-foreground transition-all duration-150 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:bg-muted/60 active:scale-95"
-                ><Newspaper class="h-4 w-4" />
-                <span>View Changelog</span></Dialog.Trigger
-            >
-
-            <Dialog.Content
-                class="flex h-3/4 w-3/4 !max-w-none flex-col overflow-hidden rounded-xl !p-0"
-            >
-                <div class="relative h-96 w-full overflow-hidden">
-                    <img
-                        src="/BannerArt.png"
-                        alt="Changelog"
-                        class="h-full w-full object-cover"
-                    />
-                    <div
-                        class="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/40"
-                    >
-                        <p
-                            class="ArrayFont text-lg font-medium tracking-widest text-white/70 uppercase"
-                        >
-                            tinystudio
-                        </p>
-                        <p class="text-6xl font-bold text-white">
-                            Version 0.3.0
-                        </p>
-                    </div>
-                </div>
-
-                <h1 class="m-3 text-2xl font-bold">New Web Interface!</h1>
-
-                <div class="mt-2 space-y-3 overflow-auto px-5">
-                    <h3 class="text-lg font-bold text-foreground">
-                        What's New
-                    </h3>
-                    <ul class="space-y-2 text-sm text-muted-foreground">
-                        <li class="flex items-start gap-2">
-                            <span
-                                class="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-green-500"
-                            ></span>
-                            <span
-                                >Added new Model workspace with improved
-                                viewport controls</span
-                            >
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <span
-                                class="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-green-500"
-                            ></span>
-                            <span
-                                >Material editor now supports real-time preview
-                                with PBR rendering</span
-                            >
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <span
-                                class="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-green-500"
-                            ></span>
-                            <span
-                                >Physics components overhaul — collision, mass,
-                                and shadow casting</span
-                            >
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <span
-                                class="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-green-500"
-                            ></span>
-                            <span
-                                >Hierarchy panel with search, context menus, and
-                                visibility toggles</span
-                            >
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <span
-                                class="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-yellow-500"
-                            ></span>
-                            <span
-                                >Fixed tab bar overflow on smaller screens</span
-                            >
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <span
-                                class="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-yellow-500"
-                            ></span>
-                            <span
-                                >Fixed save indicator not updating correctly
-                                after autosave</span
-                            >
-                        </li>
-                    </ul>
-                </div>
-            </Dialog.Content>
-        </Dialog.Root>
-
         <Tooltip.Provider>
             <Tooltip.Root>
                 <Tooltip.Trigger
@@ -296,25 +200,7 @@
                 </Tooltip.Trigger>
                 <Tooltip.Content>
                     <p>
-                        Play <Kbd.Root class="ml-1 font-bold">F5</Kbd.Root>
-                    </p>
-                </Tooltip.Content>
-            </Tooltip.Root>
-        </Tooltip.Provider>
-
-        <Tooltip.Provider>
-            <Tooltip.Root>
-                <Tooltip.Trigger
-                    class="rounded-md p-2 transition-all duration-150 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:bg-muted/60 active:scale-90"
-                    aria-label="Settings"
-                >
-                    <Settings class="h-4 w-4" />
-                </Tooltip.Trigger>
-                <Tooltip.Content>
-                    <p>
-                        Settings <Kbd.Root class="ml-1 font-bold"
-                            >Ctrl+,</Kbd.Root
-                        >
+                        Play
                     </p>
                 </Tooltip.Content>
             </Tooltip.Root>
