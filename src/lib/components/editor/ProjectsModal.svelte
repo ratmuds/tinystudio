@@ -231,7 +231,7 @@
                 <span
                     class="bg-background px-3 font-bold tracking-wider text-muted-foreground"
                 >
-                    Demo Projects & Templates
+                    Demo Projects
                 </span>
             </div>
         </div>
