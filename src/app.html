@@ -1,18 +1,42 @@
 <!doctype html>
 <html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="text-scale" content="scale" />
-		%sveltekit.head%
-	</head>
-	<body data-sveltekit-preload-data="hover">
-		<div style="display: contents">%sveltekit.body%</div>
-	</body>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="text-scale" content="scale" />
+    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+    <script>
+      eruda.init();
+    </script>
+    %sveltekit.head%
+  </head>
+  <body data-sveltekit-preload-data="hover">
+    <div style="display: contents">%sveltekit.body%</div>
+  </body>
+  <style>
+    @font-face {
+      font-family: "Array";
+      src: url("/Array-Wide.ttf") format("truetype-variations");
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "GeneralSans";
+      src: url("/GeneralSans-Variable.ttf") format("truetype-variations");
+      font-weight: 500 900;
+      font-display: swap;
+    }
+    * {
+      font-family:
+        "GeneralSans",
+        Inter var,
+        sans-serif;
+    }
 
-	<style>
-		* {
-			font-family: 'JetBrains Mono Variable', monospace;
-		}
-	</style>
+    .ArrayFont {
+      font-family:
+        "Array",
+        Inter var,
+        sans-serif !important;
+    }
+  </style>
 </html>
