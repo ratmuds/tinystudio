@@ -45,4 +45,4 @@ pnpm run dev
 
 # AI Usage
 
-I used Google Gemini for debugging and refactoring small bits. One thing I made it do, is the scheduler profiler page UI, which is pretty small.
+I used Google Gemini for debugging and refactoring small bits. One thing I made it do, is the scheduler profiler page UI, which is pretty small. The demos were rewritten by me (not the old vibe coded games anymore).
