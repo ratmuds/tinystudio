@@ -178,63 +178,65 @@
     }
 
     // Seed default tabs so there's something to work with
-    if (untrack(() => tabs.length === 0)) {
-        createNewWorld("Lobby");
-        createNewModel("My Model");
-        createNewScript("My Script");
+    untrack(() => {
+        if (tabs.length === 0) {
+            createNewWorld("Lobby");
+            createNewModel("My Model");
+            createNewScript("My Script");
 
-        const lobbyWorld = gameData.worlds[0];
-        const script = gameData.scripts[0];
-        if (lobbyWorld && script) {
-            // Ground platform
-            const ground = ECS.createPartEntity("Ground");
-            const groundTransform = ground.components.find((c) => c.name === "Transform");
-            if (groundTransform) {
-                groundTransform.data.position.value = { x: 0, y: -0.5, z: 0 };
-                groundTransform.data.scale.value = { x: 40, y: 1, z: 40 };
-            }
-            const groundPhysics = ground.components.find((c) => c.name === "Physics");
-            if (groundPhysics) {
-                groundPhysics.data.anchored.value = true;
-            }
-            const groundMesh = ground.components.find((c) => c.name === "Mesh");
-            if (groundMesh) {
-                groundMesh.data.color.value = 0x1e293b;
-            }
-            lobbyWorld.entities.push(ground);
+            const lobbyWorld = gameData.worlds[0];
+            const script = gameData.scripts[0];
+            if (lobbyWorld && script) {
+                // Ground platform
+                const ground = ECS.createPartEntity("Ground");
+                const groundTransform = ground.components.find((c) => c.name === "Transform");
+                if (groundTransform) {
+                    groundTransform.data.position.value = { x: 0, y: -0.5, z: 0 };
+                    groundTransform.data.scale.value = { x: 40, y: 1, z: 40 };
+                }
+                const groundPhysics = ground.components.find((c) => c.name === "Physics");
+                if (groundPhysics) {
+                    groundPhysics.data.anchored.value = true;
+                }
+                const groundMesh = ground.components.find((c) => c.name === "Mesh");
+                if (groundMesh) {
+                    groundMesh.data.color.value = 0x1e293b;
+                }
+                lobbyWorld.entities.push(ground);
 
-            // Player character
-            const player = ECS.createPlayerEntity("Player");
-            const playerTransform = player.components.find((c) => c.name === "Transform");
-            if (playerTransform) {
-                playerTransform.data.position.value = { x: 0, y: 1.5, z: 0 };
-            }
-            lobbyWorld.entities.push(player);
+                // Player character
+                const player = ECS.createPlayerEntity("Player");
+                const playerTransform = player.components.find((c) => c.name === "Transform");
+                if (playerTransform) {
+                    playerTransform.data.position.value = { x: 0, y: 1.5, z: 0 };
+                }
+                lobbyWorld.entities.push(player);
 
-            // Follow camera
-            const cameraEntity = ECS.createCameraEntity("Follow Camera");
-            const camComp = cameraEntity.components.find((c) => c.name === "Camera");
-            if (camComp) {
-                camComp.data.active.value = true;
-                camComp.data.mode.value = "follow";
-            }
-            lobbyWorld.entities.push(cameraEntity);
+                // Follow camera
+                const cameraEntity = ECS.createCameraEntity("Follow Camera");
+                const camComp = cameraEntity.components.find((c) => c.name === "Camera");
+                if (camComp) {
+                    camComp.data.active.value = true;
+                    camComp.data.mode.value = "follow";
+                }
+                lobbyWorld.entities.push(cameraEntity);
 
-            const part = ECS.createPartEntity("Interactive Part");
-            const partTransform = part.components.find((c) => c.name === "Transform");
-            if (partTransform) {
-                partTransform.data.position.value = { x: 4, y: 1, z: 0 };
-            }
-            const scriptComp = ECS.createScriptComponent(script.id);
-            part.components.push(scriptComp);
-            lobbyWorld.entities.push(part);
+                const part = ECS.createPartEntity("Interactive Part");
+                const partTransform = part.components.find((c) => c.name === "Transform");
+                if (partTransform) {
+                    partTransform.data.position.value = { x: 4, y: 1, z: 0 };
+                }
+                const scriptComp = ECS.createScriptComponent(script.id);
+                part.components.push(scriptComp);
+                lobbyWorld.entities.push(part);
 
-            const uiButton = ECS.createUIEntity("UIButton 1", "button");
-            lobbyWorld.entities.push(uiButton);
+                const uiButton = ECS.createUIEntity("UIButton 1", "button");
+                lobbyWorld.entities.push(uiButton);
+            }
+
+            openTestTab();
         }
-
-        openTestTab();
-    }
+    });
 
     //  Projects & Persistence 
     let projectsModalOpen = $state(true); // Open on first visit
