@@ -10,6 +10,9 @@ This means there isn't proper tests and documentation, but feel free to clone th
 
 There are significant limitations with this engine, especially with the runtime in general.
 
+## Demo (hopefully still working?)
+[https://tinystudio.ratmud.studio/](https://tinystudio.ratmud.studio/)
+
 # Basic Video (no audio)
 
 
@@ -40,3 +43,7 @@ I also tried to keep the UI looking somewhat modern, although a lot of the ECS p
 pnpm install
 pnpm run dev
 ```
+
+# AI Usage
+
+I used Google Gemini for debugging and refactoring my code when it got super messy. Some small parts I made it do, like the scheduler profiler page and graphs.
