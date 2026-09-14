@@ -1,5 +1,0 @@
-allowBuilds:
-  sharp: true
-onlyBuiltDependencies:
-  - '@tailwindcss/oxide'
-  - esbuild
