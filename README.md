@@ -11,13 +11,12 @@ This means there isn't proper tests and documentation, but feel free to clone th
 There are significant limitations with this engine, especially with the runtime in general.
 
 ## Demo (hopefully still working?)
+
 [https://tinystudio.ratmud.studio/](https://tinystudio.ratmud.studio/)
 
 # Basic Video (no audio)
 
-
 https://github.com/user-attachments/assets/d691c3f3-5595-4b22-bd1a-a0482c8c9b7b
-
 
 # What Is It?
 
@@ -46,4 +45,4 @@ pnpm run dev
 
 # AI Usage
 
-I used Google Gemini for debugging and refactoring my code when it got super messy. Some small parts I made it do, like the scheduler profiler page and graphs.
+I used Google Gemini for debugging and refactoring small bits. One thing I made it do, is the scheduler profiler page UI, which is pretty small.
